@@ -9,9 +9,9 @@
  *   - Repo mutex: one per target repo path (prevents concurrent git ops)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
+import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import type { AgentIdentity, AgentState, AgentStatus } from '@agentic-dev/shared';
@@ -35,7 +35,8 @@ import { ConcurrencySemaphore } from './concurrency';
 import { CostTracker } from './cost-tracker';
 import { LoopDetector } from './loop-detector';
 import { buildInterruptSystemPrompt, type AgentContext } from './context-builder';
-import { runAgentWithErrorHandling, extractTextContent } from './agent-runner';
+import { runAgentWithErrorHandling } from './cli-runner';
+import type { RunnerDeps } from './cli-runner';
 
 // ---------------------------------------------------------------------------
 // SSEBroadcaster — minimal interface; full implementation lives in the SSE
@@ -129,12 +130,12 @@ export class Orchestrator {
   readonly toolExecutor: ToolExecutor;
   readonly sseBroadcaster: SSEBroadcaster;
 
-  private readonly messageBus: MessageBus;
+  readonly messageBus: MessageBus;
   private readonly pipeline: TaskPipeline;
-  private readonly memoryManager: MemoryManager;
+  readonly memoryManager: MemoryManager;
   private readonly handoffService: HandoffService;
   private readonly config: OrchestratorConfig;
-  private readonly db: DB;
+  readonly db: DB;
 
   private readonly taskRepo: TaskRepository;
   private readonly agentRepo: AgentRepository;
@@ -335,36 +336,19 @@ export class Orchestrator {
       throw new Error(`Message not found: ${messageId}`);
     }
 
-    // 4. Process the interrupt in a short API call
-    const agentDef = AGENT_DEFINITIONS.find((d) => d.id === agentId);
-    const modelId = agentState.model === 'opus' ? 'claude-opus-4-6' : 'claude-sonnet-4-6';
-
-    const anthropic = new Anthropic();
-    const interruptResponse = await anthropic.messages.create({
-      model: modelId,
-      max_tokens: 4096,
-      system: buildInterruptSystemPrompt(agentState),
-      messages: [{ role: 'user', content: message.content }],
-    });
-
-    // Track the interrupt API call
-    await this.costTracker.trackCall({
-      agentId,
-      taskId: agentState.currentTaskId ?? '',
-      model: interruptResponse.model,
-      inputTokens: interruptResponse.usage.input_tokens,
-      outputTokens: interruptResponse.usage.output_tokens,
-      cacheReadTokens: interruptResponse.usage.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: interruptResponse.usage.cache_creation_input_tokens ?? 0,
-      latencyMs: 0,
-      status: 'success',
-    });
+    // 4. Process the interrupt in a short CLI call (non-blocking acknowledgement)
+    const interruptSystemPrompt = buildInterruptSystemPrompt(agentState);
+    const interruptResponseText = await this._runInterruptCli(
+      agentState.model,
+      interruptSystemPrompt,
+      message.content,
+    );
 
     // 5. Save the interrupt response to the message record
     await this.db
       .update(messages)
       .set({
-        response: extractTextContent(interruptResponse.content),
+        response: interruptResponseText,
         status: 'completed',
         respondedAt: new Date().toISOString(),
       })
@@ -471,7 +455,14 @@ export class Orchestrator {
       const releaseMutex = await mutex.acquire();
 
       try {
-        const result = await runAgentWithErrorHandling(agentDef, task, context, this);
+        const runnerDeps: RunnerDeps = {
+          costTracker: this.costTracker,
+          messageBus: this.messageBus,
+          memoryManager: this.memoryManager,
+          db: this.db,
+          sseBroadcaster: this.sseBroadcaster,
+        };
+        const result = await runAgentWithErrorHandling(agentDef, task, context, runnerDeps);
 
         // Advance the pipeline if the agent signalled completion
         if (result.completedViaSignal) {
@@ -517,11 +508,19 @@ export class Orchestrator {
     // Load project CLAUDE.md if it exists
     const claudeMd = await this.loadProjectClaudeMd(task.projectId);
 
+    // Load project path for repoPath
+    const project = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, task.projectId))
+      .get();
+
     return {
       claudeMd,
       ownMemories,
       sharedMemories,
       projectId: task.projectId,
+      repoPath: project?.path ?? null,
       handoff: handoff?.content ?? null,
       conversationSummary: null,
       correctiveMessage: null,
@@ -589,6 +588,7 @@ export class Orchestrator {
   // -------------------------------------------------------------------------
 
   private handleAgentError(agentId: string, taskId: string, err: unknown): void {
+    const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`[Orchestrator] Agent ${agentId} failed on task ${taskId}:`, err);
 
     const agentState = this.agents.get(agentId);
@@ -596,6 +596,23 @@ export class Orchestrator {
       agentState.currentTaskId = null;
       agentState.conversationMessages = [];
     }
+
+    // Persist lastError to DB (best-effort — ALTER TABLE may have already run)
+    try {
+      this.db.run(
+        sql`UPDATE agents SET last_error = ${errorMessage}, updated_at = ${new Date().toISOString()} WHERE id = ${agentId}`,
+      );
+    } catch (dbErr) {
+      console.warn(`[Orchestrator] Failed to persist lastError for agent ${agentId}:`, dbErr);
+    }
+
+    // Emit SSE so the dashboard shows the error
+    this.sseBroadcaster.emit('agent-error', {
+      agentId,
+      taskId,
+      error: errorMessage,
+      timestamp: new Date().toISOString(),
+    });
 
     // Clear the assignedAgent on the task without changing its stage,
     // so it can be re-dispatched from whatever stage it was in.
@@ -611,6 +628,60 @@ export class Orchestrator {
 
     this.setAgentStatus(agentId, 'error').catch((statusErr) => {
       console.error(`[Orchestrator] Failed to set agent ${agentId} to error state:`, statusErr);
+    });
+
+    // Auto-recover after 30s — reset to idle so the dispatch loop picks it up
+    setTimeout(() => {
+      const state = this.agents.get(agentId);
+      if (state?.status === 'error') {
+        console.log(`[Orchestrator] Auto-recovering agent ${agentId} from error state`);
+        this.setAgentStatus(agentId, 'idle').catch((recoverErr) => {
+          console.error(`[Orchestrator] Failed to auto-recover agent ${agentId}:`, recoverErr);
+        });
+      }
+    }, 30_000);
+  }
+
+  // -------------------------------------------------------------------------
+  // Interrupt CLI helper (private)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Runs a minimal claude CLI call to handle an interrupt message.
+   * Returns the response text.
+   */
+  private _runInterruptCli(
+    model: string,
+    systemPrompt: string,
+    userMessage: string,
+  ): Promise<string> {
+    const claudeBin = process.env['CLAUDE_BIN'] ?? '/Users/tomgibson/.local/bin/claude';
+    const modelId = model === 'opus' ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
+
+    return new Promise<string>((resolve) => {
+      const child = spawn(claudeBin, [
+        '--print',
+        '--model', modelId,
+        '--system-prompt', systemPrompt,
+        userMessage,
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let output = '';
+      child.stdout.on('data', (d: Buffer) => { output += d.toString(); });
+      child.on('close', () => {
+        resolve(output.trim() || '(no response)');
+      });
+      child.on('error', () => {
+        resolve('(interrupt response unavailable)');
+      });
+
+      // Kill after 60s
+      setTimeout(() => {
+        if (!child.killed) child.kill();
+        resolve(output.trim() || '(interrupt timed out)');
+      }, 60_000);
     });
   }
 

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
+import { MarkdownContent } from "@/components/common/MarkdownContent";
 import type { Message } from "@/api/types";
 
 interface MessageBubbleProps {
@@ -38,7 +39,7 @@ export function MessageBubble({ message, className }: MessageBubbleProps) {
           {new Date(message.createdAt).toLocaleTimeString()}
         </span>
       </div>
-      <p className="text-sm text-gray-800">{message.content}</p>
+      <MarkdownContent content={message.content} />
     </div>
   );
 }

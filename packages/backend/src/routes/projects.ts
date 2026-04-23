@@ -3,6 +3,12 @@ import { ProjectRepository } from '../db/repositories/project.repository.js';
 import { db } from '../db/index.js';
 import { SSE_EVENTS } from '../sse/event-types.js';
 
+const BLOCKED_PATH_PATTERNS = [
+  /^\/var\/folders\//,
+  /agentic-test/,
+  /agentic-e2e/,
+];
+
 interface CreateProjectBody {
   name: string;
   path: string;
@@ -24,6 +30,12 @@ export default async function projectRoutes(fastify: FastifyInstance): Promise<v
 
   fastify.post('/api/projects', async (request, reply) => {
     const body = request.body as CreateProjectBody;
+
+    // Block test/temp paths
+    if (BLOCKED_PATH_PATTERNS.some((p) => p.test(body.path))) {
+      return reply.code(400).send({ error: 'Project path is not allowed (test/temp paths are blocked)' });
+    }
+
     const project = await repo.create({
       name: body.name,
       path: body.path,
@@ -55,6 +67,11 @@ export default async function projectRoutes(fastify: FastifyInstance): Promise<v
     const existing = await repo.findById(id);
     if (!existing) {
       return reply.code(404).send({ error: 'Project not found' });
+    }
+
+    // Block test/temp paths on path update
+    if (body.path && BLOCKED_PATH_PATTERNS.some((p) => p.test(body.path!))) {
+      return reply.code(400).send({ error: 'Project path is not allowed (test/temp paths are blocked)' });
     }
 
     const updated = await repo.update(id, body);

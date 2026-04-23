@@ -14,21 +14,23 @@ const STATUS_BADGE: Record<
 > = {
   idle: { label: "Idle", className: "bg-gray-100 text-gray-600" },
   busy: { label: "Busy", className: "bg-blue-100 text-blue-700" },
+  working: { label: "Working", className: "bg-indigo-100 text-indigo-700" },
   error: { label: "Error", className: "bg-red-100 text-red-700" },
   paused: { label: "Paused", className: "bg-yellow-100 text-yellow-700" },
 };
 
 interface AgentCardProps {
   agent: Agent;
+  onSelect?: (agentId: string) => void;
 }
 
-export function AgentCard({ agent }: AgentCardProps) {
+export function AgentCard({ agent, onSelect }: AgentCardProps) {
   const pause = usePauseAgent();
   const resume = useResumeAgent();
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
   const [expanded, setExpanded] = useState(false);
 
-  const statusConfig = STATUS_BADGE[agent.status];
+  const statusConfig = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors">
@@ -39,6 +41,7 @@ export function AgentCard({ agent }: AgentCardProps) {
             className={cn(
               "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white",
               agent.status === "busy" && "bg-blue-500",
+              agent.status === "working" && "bg-indigo-500",
               agent.status === "idle" && "bg-green-500",
               agent.status === "error" && "bg-red-500",
               agent.status === "paused" && "bg-yellow-500"
@@ -48,12 +51,19 @@ export function AgentCard({ agent }: AgentCardProps) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900 truncate">
+            <button
+              className={cn(
+                "text-sm font-medium text-gray-900 truncate text-left",
+                onSelect && "hover:text-blue-600 hover:underline cursor-pointer"
+              )}
+              onClick={() => onSelect?.(agent.id)}
+              disabled={!onSelect}
+            >
               {agent.name}
-            </span>
+            </button>
             <span
               className={cn(
-                "text-xs px-1.5 py-0.5 rounded-full font-medium",
+                "text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0",
                 statusConfig.className
               )}
             >
@@ -68,6 +78,9 @@ export function AgentCard({ agent }: AgentCardProps) {
             >
               Working on: {agent.currentTaskId}
             </button>
+          )}
+          {agent.status === "error" && agent.lastError && (
+            <p className="text-xs text-red-600 mt-1 line-clamp-2">{agent.lastError}</p>
           )}
         </div>
 
@@ -95,7 +108,17 @@ export function AgentCard({ agent }: AgentCardProps) {
             >
               Resume
             </Button>
-          ) : agent.status !== "error" ? (
+          ) : agent.status === "error" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7 border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => resume.mutate(agent.id)}
+              disabled={resume.isPending}
+            >
+              Retry
+            </Button>
+          ) : agent.status !== "idle" ? (
             <Button
               size="sm"
               variant="ghost"

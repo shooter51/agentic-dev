@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { db } from './db/index.js';
 import { seedAgents } from './db/seed.js';
@@ -22,9 +23,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 
 const PORT = Number(process.env['PORT'] ?? 3001);
-const ANTHROPIC_API_KEY = process.env['ANTHROPIC_API_KEY'] ?? '';
+// ANTHROPIC_API_KEY is optional — Claude CLI uses its own auth
+const ANTHROPIC_API_KEY = process.env['ANTHROPIC_API_KEY'] ?? null;
 const DB_PATH = process.env['DB_PATH'] ?? 'data/agentic-dev.db';
 const HELP_MODEL_ID = process.env['HELP_MODEL_ID'] ?? 'claude-sonnet-4-6';
+const AUTH_BYPASS = process.env['AUTH_BYPASS'] === 'true';
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -39,16 +42,24 @@ async function start() {
     ANTHROPIC_API_KEY,
     DB_PATH,
     HELP_MODEL_ID,
+    AUTH_BYPASS,
   });
 
   // -- CORS -------------------------------------------------------------------
   await server.register(cors, {
-    origin: ['http://localhost:5173'],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // -- DB migrations ----------------------------------------------------------
   migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
+
+  // -- ALTER TABLE: add lastError column if not exists -----------------------
+  try {
+    await db.run(sql`ALTER TABLE agents ADD COLUMN last_error TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   // -- DB seed ----------------------------------------------------------------
   await seedAgents(db);
@@ -95,7 +106,7 @@ async function start() {
 
   // -- Start ------------------------------------------------------------------
   try {
-    await server.listen({ port: PORT, host: '127.0.0.1' });
+    await server.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     server.log.error(err);
     process.exit(1);

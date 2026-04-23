@@ -173,7 +173,7 @@ export class TaskPipeline {
       event: 'stage_change',
       fromValue: task.stage,
       toValue: 'cancelled',
-      agentId: 'operator',
+      agentId: undefined,
       details: JSON.stringify({ action: 'cancellation', reason }),
     });
 
@@ -214,7 +214,7 @@ export class TaskPipeline {
       event: 'stage_change',
       fromValue: previousStage,
       toValue: 'deferred',
-      agentId: 'operator',
+      agentId: undefined,
       details: JSON.stringify({ action: 'deferral', reason }),
     });
   }
@@ -369,13 +369,17 @@ export class TaskPipeline {
     agentId?: string;
     details?: string;
   }): Promise<void> {
+    // Null out non-FK-valid agent IDs (e.g. 'operator' is not in the agents table)
+    const SYSTEM_ACTOR_IDS = new Set(['operator', 'system', 'pipeline']);
+    const agentId = row.agentId && !SYSTEM_ACTOR_IDS.has(row.agentId) ? row.agentId : null;
+
     await this.db.insert(taskHistory).values({
       id: ulid(),
       taskId: row.taskId,
       event: row.event,
       fromValue: row.fromValue ?? null,
       toValue: row.toValue ?? null,
-      agentId: row.agentId ?? null,
+      agentId,
       details: row.details ?? null,
       createdAt: new Date().toISOString(),
     });

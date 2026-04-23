@@ -1,5 +1,5 @@
 export type Priority = "P0" | "P1" | "P2" | "P3" | "P4";
-export type TaskType = "feature" | "bug" | "chore" | "spike";
+export type TaskType = "feature" | "bug" | "chore" | "spike" | "task";
 
 export interface Task {
   id: string;
@@ -26,7 +26,7 @@ export interface TaskHistoryEvent {
   createdAt: string;
 }
 
-export type AgentStatus = "idle" | "busy" | "error" | "paused";
+export type AgentStatus = "idle" | "busy" | "error" | "paused" | "working";
 
 export interface Agent {
   id: string;
@@ -35,6 +35,9 @@ export interface Agent {
   status: AgentStatus;
   currentTaskId?: string;
   lastHeartbeat?: string;
+  model?: string;
+  specialization?: string;
+  lastError?: string;
 }
 
 export interface Message {

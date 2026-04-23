@@ -10,6 +10,11 @@ interface OperatorMessageBody {
   content: string;
 }
 
+interface TaskMessageBody {
+  content: string;
+  toAgent?: string;
+}
+
 export default async function messageRoutes(fastify: FastifyInstance): Promise<void> {
   const repo = new MessageRepository(db);
 
@@ -33,6 +38,44 @@ export default async function messageRoutes(fastify: FastifyInstance): Promise<v
 
     // Default: return all messages
     return db.select().from(messagesTable);
+  });
+
+  // POST /api/tasks/:taskId/messages — operator message for a task
+  fastify.post('/api/tasks/:taskId/messages', async (request, reply) => {
+    const { taskId } = request.params as { taskId: string };
+    const body = request.body as TaskMessageBody;
+
+    // Route to the agent assigned to this task (if any), otherwise broadcast as notification
+    const { TaskRepository } = await import('../db/repositories/task.repository.js');
+    const taskRepo = new TaskRepository(db);
+    const task = await taskRepo.findById(taskId);
+
+    if (!task) {
+      return reply.code(404).send({ error: 'Task not found' });
+    }
+
+    const toAgent = body.toAgent ?? task.assignedAgent ?? 'operator';
+
+    const message = await repo.create({
+      taskId,
+      fromAgent: 'operator',
+      toAgent,
+      type: 'notification',
+      content: body.content,
+      status: 'completed',
+      response: null,
+      respondedAt: null,
+    });
+
+    (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.NEW_MESSAGE, {
+      taskId,
+      projectId: task.projectId,
+      agentId: toAgent,
+      messageId: message.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    reply.code(201).send(message);
   });
 
   // Send an operator message to an agent

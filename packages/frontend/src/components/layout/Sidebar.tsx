@@ -9,7 +9,7 @@ export function Sidebar() {
     <aside
       className={cn(
         "border-l bg-white flex-shrink-0 transition-all duration-200",
-        sidebarOpen ? "w-72" : "w-0 overflow-hidden border-0"
+        sidebarOpen ? "w-72 h-full overflow-y-auto" : "w-0 overflow-hidden border-0"
       )}
     >
       {sidebarOpen && <AgentPanel />}

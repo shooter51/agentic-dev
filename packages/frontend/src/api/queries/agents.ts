@@ -6,7 +6,7 @@ export function useAgents() {
   return useQuery({
     queryKey: ["agents"],
     queryFn: () => apiClient.get<Agent[]>("/api/agents"),
-    refetchInterval: 10_000,
+    refetchInterval: 3_000,
   });
 }
 

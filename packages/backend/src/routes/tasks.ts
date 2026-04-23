@@ -16,6 +16,8 @@ interface UpdateTaskBody {
   title?: string;
   description?: string;
   priority?: 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
+  metadata?: Record<string, unknown> | string;
+  branchName?: string;
 }
 
 interface ForceMoveBody {
@@ -90,9 +92,28 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
     }
 
     const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+
+    // Merge metadata as object (handle string input too)
+    let mergedMetadata: string | undefined;
+    if (body.metadata !== undefined) {
+      const existingMeta: Record<string, unknown> = JSON.parse(task.metadata ?? '{}');
+      const incomingMeta: Record<string, unknown> =
+        typeof body.metadata === 'string'
+          ? (JSON.parse(body.metadata) as Record<string, unknown>)
+          : body.metadata;
+      mergedMetadata = JSON.stringify({ ...existingMeta, ...incomingMeta });
+    }
+
+    const { metadata: _metadata, ...bodyWithoutMeta } = body;
+    void _metadata;
+
     await db
       .update(tasksTable)
-      .set({ ...body, updatedAt: new Date().toISOString() })
+      .set({
+        ...bodyWithoutMeta,
+        ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {}),
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(tasksTable.id, id));
 
     const updated = await repo.findById(id);

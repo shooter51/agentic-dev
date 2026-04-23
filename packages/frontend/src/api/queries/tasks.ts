@@ -10,6 +10,7 @@ export function useBoard(projectId: string) {
         `/api/projects/${projectId}/board`
       ),
     refetchOnWindowFocus: true,
+    refetchInterval: 3_000,
   });
 }
 
@@ -18,6 +19,7 @@ export function useTask(taskId: string) {
     queryKey: ["tasks", taskId],
     queryFn: () => apiClient.get<Task>(`/api/tasks/${taskId}`),
     enabled: !!taskId,
+    refetchInterval: 5_000,
   });
 }
 
@@ -27,6 +29,7 @@ export function useTaskHistory(taskId: string) {
     queryFn: () =>
       apiClient.get<TaskHistoryEvent[]>(`/api/tasks/${taskId}/history`),
     enabled: !!taskId,
+    refetchInterval: 5_000,
   });
 }
 

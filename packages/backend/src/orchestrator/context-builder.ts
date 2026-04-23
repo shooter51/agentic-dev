@@ -48,6 +48,8 @@ export interface AgentContext {
   sharedMemories: Memory[];
   /** Project ID for memory scoping */
   projectId: string | null;
+  /** Repository path on disk */
+  repoPath?: string | null;
   /** Handoff document from the previous stage agent */
   handoff: string | null;
   /** Conversation summary if resuming after an interrupt */
@@ -180,6 +182,28 @@ export function buildTaskPrompt(
   }
 
   lines.push(
+    ``,
+    `## Available MCP Tools`,
+    ``,
+    `The following MCP tools are available via the orchestrator MCP server:`,
+    ``,
+    `- **signal_complete(summary, handoff_content?)** — call when your work is done. Required to advance the pipeline.`,
+    `- **create_memory(type, content, title?)** — persist knowledge for future use (types: project, decision, snippet, personal).`,
+    `- **read_memories(type?)** — retrieve your own memories and shared project/decision memories.`,
+    `- **send_message(to_agent, message, type)** — send a clarification or rejection to another agent.`,
+    `- **update_task_metadata(key, value)** — write structured metadata for pipeline quality gates.`,
+    `- **beads_create(title, severity, description)** — log a defect.`,
+    `- **beads_list()** — list open defects.`,
+    ``,
+    `> **WARNING**: Do NOT run tests or servers against localhost:3001. That port is reserved for the backend API.`,
+    ``,
+    `## Quality Gate Requirements`,
+    ``,
+    `Before calling signal_complete, ensure:`,
+    `- Unit test coverage ≥ 80% for all new/modified code`,
+    `- All tests pass`,
+    `- No hardcoded secrets or credentials`,
+    `- update_task_metadata has been called with relevant gate values (allTestsPassing, unitCoverage, etc.)`,
     ``,
     `---`,
     ``,

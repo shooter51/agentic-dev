@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
+import { PipelineProgress } from "@/components/common/PipelineProgress";
+import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { TaskHistory } from "./TaskHistory";
 import { QualityGateStatus } from "./QualityGateStatus";
 import { HandoffViewer } from "./HandoffViewer";
@@ -38,9 +40,9 @@ export function TaskDetail() {
           )}
         </SheetHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {task && (
-            <Tabs defaultValue="details" className="flex-1 flex flex-col">
+            <Tabs defaultValue="details" className="flex-1 min-h-0 flex flex-col">
               <TabsList className="mx-6 mt-4 self-start">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
@@ -53,6 +55,15 @@ export function TaskDetail() {
                 className="flex-1 px-6 py-4 overflow-y-auto"
               >
                 <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Pipeline Progress
+                    </label>
+                    <div className="mt-2">
+                      <PipelineProgress currentStage={task.stage} />
+                    </div>
+                  </div>
+
                   {task.assignedAgent && (
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -72,9 +83,9 @@ export function TaskDetail() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Description
                       </label>
-                      <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
-                        {task.description}
-                      </p>
+                      <div className="mt-1">
+                        <MarkdownContent content={task.description} />
+                      </div>
                     </div>
                   )}
 
