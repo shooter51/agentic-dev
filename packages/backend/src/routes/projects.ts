@@ -16,6 +16,7 @@ interface UpdateProjectBody {
 }
 
 export default async function projectRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const repo = new ProjectRepository(db);
 
   fastify.get('/api/projects', async (_request, _reply) => {

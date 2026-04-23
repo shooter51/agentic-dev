@@ -121,6 +121,44 @@ export function createTestDb(): TestDB {
       error_code TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      roles TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      jti TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      replaced_by TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS refresh_tokens_user_idx ON refresh_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS refresh_tokens_exp_idx ON refresh_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS refresh_tokens_replaced_idx ON refresh_tokens(replaced_by);
+
+    CREATE TABLE IF NOT EXISTS auth_audit_log (
+      id TEXT PRIMARY KEY,
+      event TEXT NOT NULL,
+      user_id TEXT,
+      email_hash TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      details TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS auth_audit_user_created_idx ON auth_audit_log(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS auth_audit_event_created_idx ON auth_audit_log(event, created_at);
   `);
 
   return drizzle(sqlite, { schema });

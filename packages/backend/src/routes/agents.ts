@@ -10,6 +10,7 @@ interface UpdateAgentBody {
 }
 
 export default async function agentRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const repo = new AgentRepository(db);
 
   // List all agents with status

@@ -1,0 +1,10 @@
+export { authPlugin } from './auth.plugin.js';
+export { AuthService } from './auth.service.js';
+export { loadAuthConfig } from './config.js';
+export type { AuthConfig } from './config.js';
+export { AuthError } from './errors.js';
+export { KeyRing } from './key-ring.js';
+export { hashPassword, verifyPassword } from './password.js';
+export { issueAccessToken, issueRefreshToken } from './tokens.js';
+export { AuditWriter } from './audit.js';
+export { createLoginRateLimitConfig } from './rate-limit.js';

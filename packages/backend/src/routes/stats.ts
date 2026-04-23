@@ -8,6 +8,7 @@ import { CostTracker } from '../orchestrator/cost-tracker.js';
 const costTracker = new CostTracker(db);
 
 export default async function statsRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const agentRepo = new AgentRepository(db);
 
   // Cost summary — per agent and overall

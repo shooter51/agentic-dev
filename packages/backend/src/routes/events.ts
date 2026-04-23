@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 export default async function eventsRoute(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   fastify.get('/api/events', async (request, reply) => {
     const lastEventId = request.headers['last-event-id'] as string | undefined;
 

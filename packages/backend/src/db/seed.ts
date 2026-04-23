@@ -1,4 +1,5 @@
-import { agents } from './schema';
+import { ulid } from 'ulid';
+import { agents, users } from './schema';
 import type { DB } from './index';
 
 // Note: better-sqlite3 is synchronous under the hood, so Drizzle calls
@@ -29,4 +30,28 @@ export async function seedAgents(db: DB): Promise<void> {
       })
       .onConflictDoNothing();
   }
+}
+
+export async function seedOperatorUser(db: DB): Promise<void> {
+  const email = process.env['OPERATOR_EMAIL'];
+  const passwordHash = process.env['OPERATOR_PASSWORD_HASH'];
+
+  if (!email || !passwordHash) {
+    // Auth env vars not set — skip operator seeding (allows non-auth dev mode)
+    return;
+  }
+
+  const existing = db.select().from(users).all();
+  if (existing.length > 0) return;
+
+  const now = new Date().toISOString();
+  await db.insert(users).values({
+    id: ulid(),
+    email: email.toLowerCase(),
+    passwordHash,
+    roles: JSON.stringify(['user', 'admin']),
+    status: 'active',
+    createdAt: now,
+    updatedAt: now,
+  });
 }

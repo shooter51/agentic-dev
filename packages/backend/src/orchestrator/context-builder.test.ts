@@ -174,7 +174,7 @@ describe('buildTaskPrompt', () => {
 
   it('always includes completion instruction', () => {
     const result = buildTaskPrompt(task, null, null);
-    expect(result).toContain('signal_complete');
+    expect(result).toContain('simply finish your response');
   });
 
   it('truncates oversized claudeMd', () => {
