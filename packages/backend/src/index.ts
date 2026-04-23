@@ -1,23 +1,108 @@
-import Fastify from "fastify";
+import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { db } from './db/index.js';
+import { seedAgents } from './db/seed.js';
+import { SSEBroadcaster } from './sse/broadcaster.js';
+import { orchestratorPlugin } from './orchestrator/index.js';
+import { registerRoutes } from './routes/index.js';
+import { MessageBus } from './messaging/index.js';
+import { HandoffService } from './messaging/index.js';
+import { TaskPipeline } from './pipeline/index.js';
+import { MemoryManager } from './memory/index.js';
+import { ToolExecutor } from './tools/index.js';
 
-const server = Fastify({ logger: true });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-server.get("/", async (_request, _reply) => {
-  return { hello: "world" };
-});
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
 
-server.get("/health", async (_request, _reply) => {
-  return { status: "ok" };
-});
+const PORT = Number(process.env['PORT'] ?? 3001);
+const ANTHROPIC_API_KEY = process.env['ANTHROPIC_API_KEY'] ?? '';
+const DB_PATH = process.env['DB_PATH'] ?? 'data/agentic-dev.db';
+const HELP_MODEL_ID = process.env['HELP_MODEL_ID'] ?? 'claude-sonnet-4-6';
 
-const start = async () => {
-  const port = Number(process.env["PORT"] ?? 3001);
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
+async function start() {
+  const server = Fastify({ logger: true });
+
+  // -- Config decorator -------------------------------------------------------
+  server.decorate('config', {
+    PORT,
+    ANTHROPIC_API_KEY,
+    DB_PATH,
+    HELP_MODEL_ID,
+  });
+
+  // -- CORS -------------------------------------------------------------------
+  await server.register(cors, {
+    origin: ['http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
+  // -- DB migrations ----------------------------------------------------------
+  migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
+
+  // -- DB seed ----------------------------------------------------------------
+  await seedAgents(db);
+
+  // -- Service instantiation --------------------------------------------------
+  const sseBroadcaster = new SSEBroadcaster();
+
+  // Decorator so routes can access the broadcaster
+  server.decorate('sseBroadcaster', sseBroadcaster);
+
+  const messageBus = new MessageBus(db);
+  const pipeline = new TaskPipeline(db, sseBroadcaster);
+  const memoryManager = new MemoryManager(db);
+  const handoffService = new HandoffService(db);
+  const toolExecutor = new ToolExecutor(
+    db,
+    { commandTimeoutMs: 120_000, messageTimeoutMs: 600_000 },
+    messageBus,
+    memoryManager,
+  );
+
+  // -- Orchestrator plugin ----------------------------------------------------
+  await server.register(orchestratorPlugin, {
+    db,
+    messageBus,
+    pipeline,
+    memoryManager,
+    handoffService,
+    toolExecutor,
+    sseBroadcaster,
+  });
+
+  // -- Routes -----------------------------------------------------------------
+  await registerRoutes(server);
+
+  // -- Start ------------------------------------------------------------------
   try {
-    await server.listen({ port, host: "0.0.0.0" });
+    await server.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     server.log.error(err);
     process.exit(1);
   }
-};
+
+  // -- Graceful shutdown ------------------------------------------------------
+  const shutdown = async (signal: string) => {
+    server.log.info(`Received ${signal}, shutting down…`);
+    sseBroadcaster.shutdown();
+    messageBus.shutdown();
+    await server.close();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
 
 start();

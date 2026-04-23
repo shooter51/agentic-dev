@@ -34,16 +34,6 @@ export class TaskRepository {
   }
 
   async findReadyForDispatch(): Promise<Task[]> {
-    const childDefects = this.db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.type, 'bug'),
-          notInArray(tasks.stage, ['done', 'cancelled']),
-        ),
-      );
-
     return this.db
       .select()
       .from(tasks)
@@ -51,12 +41,12 @@ export class TaskRepository {
         and(
           notInArray(tasks.stage, ['todo', 'done', 'cancelled', 'deferred']),
           isNull(tasks.assignedAgent),
-          notExists(
-            this.db
-              .select({ one: sql`1` })
-              .from(childDefects.as('child_defects'))
-              .where(sql`child_defects.parent_task_id = ${tasks.id}`),
-          ),
+          sql`NOT EXISTS (
+            SELECT 1 FROM tasks AS child
+            WHERE child.parent_task_id = ${tasks.id}
+              AND child.type = 'bug'
+              AND child.stage NOT IN ('done', 'cancelled')
+          )`,
         ),
       )
       .orderBy(

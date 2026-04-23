@@ -364,20 +364,17 @@ export class Orchestrator {
       })
       .where(eq(messages.id, messageId));
 
-    // 6. Resume original task with rehydrated conversation state
+    // 6. Resume original task — restore conversation state and set back to working.
+    //    NOTE: We do NOT call runAgent() here because the original runAgent() call
+    //    that was interrupted still holds the repo mutex. The interrupted agent's
+    //    run loop will be re-entered by the caller (routePendingMessages) which
+    //    signals the agent runner to continue from where it left off.
     const savedSnapshot = conversationSnapshotStore.get(agentId);
     if (savedSnapshot && savedSnapshot.taskId) {
       agentState.conversationMessages = JSON.parse(savedSnapshot.messages);
       agentState.systemPrompt = savedSnapshot.systemPrompt;
+      conversationSnapshotStore.delete(agentId);
       await this.setAgentStatus(agentId, 'working');
-
-      // Re-enter the agent run loop with restored state
-      const task = await this.taskRepo.findById(savedSnapshot.taskId);
-      if (task && agentDef) {
-        this.runAgent(agentId, savedSnapshot.taskId).catch((err) =>
-          this.handleAgentError(agentId, savedSnapshot.taskId, err),
-        );
-      }
     } else {
       // No task to resume — return to idle
       await this.setAgentStatus(agentId, 'idle');
@@ -574,6 +571,11 @@ export class Orchestrator {
       agentState.currentTaskId = null;
       agentState.conversationMessages = [];
     }
+
+    // Unassign task so it can be re-dispatched or reassigned
+    this.taskRepo.updateStage(taskId, 'development', undefined).catch((updateErr) => {
+      console.error(`[Orchestrator] Failed to unassign task ${taskId}:`, updateErr);
+    });
 
     this.setAgentStatus(agentId, 'error').catch((statusErr) => {
       console.error(`[Orchestrator] Failed to set agent ${agentId} to error state:`, statusErr);

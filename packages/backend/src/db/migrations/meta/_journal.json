@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1776914440816,
+      "tag": "0000_giant_agent_brand",
+      "breakpoints": true
+    }
+  ]
+}
