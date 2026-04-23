@@ -273,9 +273,9 @@ export class Orchestrator {
     const agentState = this.agents.get(agentId);
     if (!agentState) throw new Error(`Agent not found: ${agentId}`);
 
-    if (agentState.status !== 'paused') {
-      throw new Error(`Agent ${agentId} is not paused (current: ${agentState.status})`);
-    }
+    // Only resume from paused/error — don't touch working agents
+    if (agentState.status === 'working') return;
+    if (agentState.status === 'idle') return;
 
     await this.setAgentStatus(agentId, 'idle');
 
@@ -430,7 +430,10 @@ export class Orchestrator {
   // -------------------------------------------------------------------------
 
   private async dispatchTask(agentId: string, taskId: string): Promise<void> {
+    console.log(`[Dispatch] Setting ${agentId} to working for task ${taskId}`);
     await this.setAgentStatus(agentId, 'working');
+    const stateAfterSet = this.agents.get(agentId);
+    console.log(`[Dispatch] ${agentId} in-memory status after set: ${stateAfterSet?.status}`);
 
     const agentState = this.agents.get(agentId);
     if (agentState) {
@@ -486,9 +489,11 @@ export class Orchestrator {
     } finally {
       // Clear agent state on completion (regardless of outcome)
       const agentState = this.agents.get(agentId);
+      console.log(`[Dispatch] finally block for ${agentId}: status=${agentState?.status}`);
       if (agentState && agentState.status === 'working') {
         agentState.currentTaskId = null;
         agentState.conversationMessages = [];
+        console.log(`[Dispatch] Setting ${agentId} back to idle (agent completed)`);
         await this.setAgentStatus(agentId, 'idle');
 
         // Also clear task assignment so dispatch can re-pick it up if needed
