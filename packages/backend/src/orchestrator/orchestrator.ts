@@ -487,6 +487,13 @@ export class Orchestrator {
         agentState.currentTaskId = null;
         agentState.conversationMessages = [];
         await this.setAgentStatus(agentId, 'idle');
+
+        // Also clear task assignment so dispatch can re-pick it up if needed
+        try {
+          this.db.run(
+            sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${taskId} AND assigned_agent = ${agentId}`,
+          );
+        } catch { /* best effort */ }
       }
 
       // Clear loop detector history for this agent
