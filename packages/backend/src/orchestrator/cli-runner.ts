@@ -172,6 +172,7 @@ export async function runAgentLoop(
   // Build claude CLI args
   const claudeBin = getClaudeBinaryPath();
   const args: string[] = [
+    '--verbose',
     '--output-format', 'stream-json',
     '--model', modelId,
     '--max-turns', '50',
