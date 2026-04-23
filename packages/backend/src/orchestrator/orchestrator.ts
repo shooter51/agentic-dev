@@ -698,6 +698,11 @@ export class Orchestrator {
   // Watchdog: detect and recover stuck tasks (private)
   // -------------------------------------------------------------------------
 
+  /** Tracks consecutive failure count per task to prevent infinite retry loops */
+  private readonly taskFailureCounts: Map<string, number> = new Map();
+  private static readonly MAX_RETRIES = 3;
+  private static readonly STUCK_THRESHOLD_MS = 120_000; // 2 minutes grace period
+
   private async recoverStuckTasks(): Promise<void> {
     try {
       const { tasks: tasksTable } = await import('../db/schema/tasks.js');
@@ -708,15 +713,32 @@ export class Orchestrator {
           sql`assigned_agent IS NOT NULL AND stage NOT IN ('done', 'cancelled', 'deferred', 'todo')`,
         );
 
+      const now = Date.now();
+
       for (const task of stuckTasks) {
         if (!task.assignedAgent) continue;
+        if (this.dispatchingTasks.has(task.id)) continue;
+
+        // Grace period: don't touch tasks assigned less than 2 minutes ago
+        const updatedAt = new Date(task.updatedAt).getTime();
+        if (now - updatedAt < Orchestrator.STUCK_THRESHOLD_MS) continue;
+
         const agentState = this.agents.get(task.assignedAgent);
-        if (agentState && (agentState.status === 'idle' || agentState.status === 'error') && !this.dispatchingTasks.has(task.id)) {
-          console.log(`[Watchdog] Recovering stuck task ${task.id} (agent ${task.assignedAgent} is ${agentState.status})`);
-          this.db.run(
-            sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${task.id}`,
-          );
+        if (!agentState || (agentState.status !== 'idle' && agentState.status !== 'error')) continue;
+
+        // Track failure count to prevent infinite retry loops
+        const failures = (this.taskFailureCounts.get(task.id) ?? 0) + 1;
+        this.taskFailureCounts.set(task.id, failures);
+
+        if (failures > Orchestrator.MAX_RETRIES) {
+          console.warn(`[Watchdog] Task ${task.id} failed ${failures} times — stopping retries. Manual intervention required.`);
+          continue;
         }
+
+        console.log(`[Watchdog] Recovering stuck task ${task.id} (agent ${task.assignedAgent} is ${agentState.status}, attempt ${failures}/${Orchestrator.MAX_RETRIES})`);
+        this.db.run(
+          sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${task.id}`,
+        );
       }
     } catch (err) {
       console.warn('[Watchdog] Error:', err instanceof Error ? err.message : err);
