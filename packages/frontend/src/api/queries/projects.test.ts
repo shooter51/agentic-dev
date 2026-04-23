@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { useProjects, useCreateProject } from "./projects";
+import { useProjects, useCreateProject, useImportProject } from "./projects";
 
 function makeFetchOk(body: unknown) {
   return {
@@ -93,6 +93,56 @@ describe("useCreateProject", () => {
     const { result } = renderHook(() => useCreateProject(), { wrapper: wrapper(qc) });
 
     result.current.mutate({ name: "Y", path: "/y" });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["projects"] });
+  });
+});
+
+describe("useImportProject", () => {
+  it("posts to /api/projects/import with path", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const imported = { id: "imp-1", name: "my-project", path: "/home/user/my-project", config: null, createdAt: "", updatedAt: "" };
+    vi.mocked(fetch).mockResolvedValue(makeFetchOk(imported));
+
+    const { result } = renderHook(() => useImportProject(), { wrapper: wrapper(qc) });
+
+    result.current.mutate({ path: "/home/user/my-project" });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const [url, opts] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/projects/import");
+    expect(opts?.method).toBe("POST");
+    expect(JSON.parse(opts?.body as string)).toEqual({ path: "/home/user/my-project" });
+  });
+
+  it("passes optional name when provided", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const imported = { id: "imp-2", name: "Custom", path: "/dir", config: null, createdAt: "", updatedAt: "" };
+    vi.mocked(fetch).mockResolvedValue(makeFetchOk(imported));
+
+    const { result } = renderHook(() => useImportProject(), { wrapper: wrapper(qc) });
+
+    result.current.mutate({ path: "/dir", name: "Custom" });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(body.name).toBe("Custom");
+    expect(body.path).toBe("/dir");
+  });
+
+  it("invalidates projects query on success", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const imported = { id: "imp-3", name: "Z", path: "/z", config: null, createdAt: "", updatedAt: "" };
+    vi.mocked(fetch).mockResolvedValue(makeFetchOk(imported));
+
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useImportProject(), { wrapper: wrapper(qc) });
+
+    result.current.mutate({ path: "/z" });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["projects"] });

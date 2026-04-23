@@ -54,6 +54,12 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(404).send({ error: 'Agent not found' });
     }
 
+    // Clear error message on resume
+    await db
+      .update(agentsTable)
+      .set({ lastError: null, updatedAt: new Date().toISOString() })
+      .where(eq(agentsTable.id, id));
+
     const orchestrator = (fastify as any).orchestrator;
     if (orchestrator) {
       await orchestrator.resumeAgent(id);

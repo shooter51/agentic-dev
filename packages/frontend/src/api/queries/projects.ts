@@ -28,3 +28,15 @@ export function useCreateProject() {
     },
   });
 }
+
+export function useImportProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { path: string; name?: string; config?: string }) =>
+      apiClient.post<Project>("/api/projects/import", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}

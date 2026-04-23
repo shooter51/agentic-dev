@@ -29,6 +29,7 @@ export default defineConfig({
         'src/pipeline/guards.ts',
         'src/pipeline/fsm.ts',
         'src/pipeline/transitions.ts',
+        'src/db/repositories/project.repository.ts',
         'src/db/repositories/task.repository.ts',
         'src/db/repositories/message.repository.ts',
         'src/db/repositories/memory.repository.ts',

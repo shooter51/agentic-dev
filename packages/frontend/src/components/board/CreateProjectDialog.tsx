@@ -116,6 +116,11 @@ export function CreateProjectDialog() {
               <p className="text-xs text-red-600 mt-1">{configError}</p>
             )}
           </div>
+          {createProject.isError && (
+            <p className="text-xs text-red-600">
+              {createProject.error?.message ?? "Failed to create project"}
+            </p>
+          )}
           <div className="flex justify-end gap-2 mt-2">
             <Button
               type="button"

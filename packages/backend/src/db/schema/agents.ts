@@ -9,6 +9,7 @@ export const agents = sqliteTable('agents', {
   }).notNull(),
   currentTask: text('current_task'),
   specialization: text('specialization'),
+  lastError: text('last_error'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

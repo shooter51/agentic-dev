@@ -70,6 +70,11 @@ export function AgentCard({ agent }: AgentCardProps) {
               Working on: {agent.currentTaskId}
             </button>
           )}
+          {agent.status === "error" && agent.lastError && (
+            <p className="text-xs text-red-500 mt-1 line-clamp-2" title={agent.lastError}>
+              {agent.lastError}
+            </p>
+          )}
         </div>
 
         <div className="flex-shrink-0 flex items-center gap-1">
@@ -86,7 +91,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               <ChevronRight className="w-3.5 h-3.5" />
             )}
           </Button>
-          {agent.status === "paused" ? (
+          {agent.status === "paused" || agent.status === "error" ? (
             <Button
               size="sm"
               variant="outline"
@@ -94,9 +99,9 @@ export function AgentCard({ agent }: AgentCardProps) {
               onClick={() => resume.mutate(agent.id)}
               disabled={resume.isPending}
             >
-              Resume
+              {agent.status === "error" ? "Retry" : "Resume"}
             </Button>
-          ) : agent.status !== "error" ? (
+          ) : (
             <Button
               size="sm"
               variant="ghost"
@@ -106,7 +111,7 @@ export function AgentCard({ agent }: AgentCardProps) {
             >
               Pause
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
 

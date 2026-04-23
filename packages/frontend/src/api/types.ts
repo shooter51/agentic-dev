@@ -34,6 +34,7 @@ export interface Agent {
   role: string;
   status: AgentStatus;
   currentTaskId?: string;
+  lastError?: string;
   lastHeartbeat?: string;
 }
 

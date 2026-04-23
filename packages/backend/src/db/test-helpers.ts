@@ -30,6 +30,7 @@ export function createTestDb(): TestDB {
       status TEXT NOT NULL,
       current_task TEXT,
       specialization TEXT,
+      last_error TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

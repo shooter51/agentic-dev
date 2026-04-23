@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { sql } from 'drizzle-orm';
 import { db } from './db/index.js';
 import { seedAgents, seedOperatorUser } from './db/seed.js';
 import { SSEBroadcaster } from './sse/broadcaster.js';
@@ -49,12 +50,17 @@ async function start() {
 
   // -- CORS -------------------------------------------------------------------
   await server.register(cors, {
-    origin: ['http://localhost:5173'],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // -- DB migrations ----------------------------------------------------------
   migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
+
+  // Manual migration: add last_error column if not exists
+  try {
+    (db as any).run(sql`ALTER TABLE agents ADD COLUMN last_error TEXT`);
+  } catch { /* column already exists */ }
 
   // -- DB seed ----------------------------------------------------------------
   await seedAgents(db);
@@ -109,7 +115,7 @@ async function start() {
 
   // -- Start ------------------------------------------------------------------
   try {
-    await server.listen({ port: PORT, host: '127.0.0.1' });
+    await server.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     server.log.error(err);
     process.exit(1);
