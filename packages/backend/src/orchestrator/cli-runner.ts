@@ -230,26 +230,23 @@ export async function runAgentLoop(
           continue;
         }
 
-        // Capture text from assistant turns
+        // Capture text and tool_use from assistant turns
         if (event.type === 'assistant') {
           const assistantEvent = event as StreamAssistantText;
-          for (const block of assistantEvent.message.content) {
+          for (const block of assistantEvent.message?.content ?? []) {
             if (block.type === 'text' && block.text) {
               finalSummary = block.text;
             }
+            // Tool calls are nested inside assistant message content blocks
+            if (block.type === 'tool_use') {
+              deps.sseBroadcaster.emit('agent-tool-use', {
+                agentId: agent.id,
+                taskId: task.id,
+                tool: (block as any).name ?? 'unknown',
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
-        }
-
-        // Emit tool_use events as SSE for dashboard
-        if (event.type === 'tool_use') {
-          const toolEvent = event as StreamToolUse;
-          deps.sseBroadcaster.emit('agent-tool-use', {
-            agentId: agent.id,
-            taskId: task.id,
-            tool: toolEvent.name ?? 'unknown',
-            input: toolEvent.input ?? {},
-            timestamp: new Date().toISOString(),
-          });
         }
 
         // Capture cost from result event
