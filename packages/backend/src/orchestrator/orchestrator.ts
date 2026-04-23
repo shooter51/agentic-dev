@@ -389,6 +389,9 @@ export class Orchestrator {
   }
 
   private async runDispatchCycle(): Promise<void> {
+    // 0. Watchdog: detect and fix stuck tasks
+    await this.recoverStuckTasks();
+
     // 1. Find tasks ready for dispatch
     const readyTasks = await this.taskRepo.findReadyForDispatch();
 
@@ -689,6 +692,35 @@ export class Orchestrator {
         resolve(output.trim() || '(interrupt timed out)');
       }, 60_000);
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Watchdog: detect and recover stuck tasks (private)
+  // -------------------------------------------------------------------------
+
+  private async recoverStuckTasks(): Promise<void> {
+    try {
+      const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+      const stuckTasks = await this.db
+        .select()
+        .from(tasksTable)
+        .where(
+          sql`assigned_agent IS NOT NULL AND stage NOT IN ('done', 'cancelled', 'deferred', 'todo')`,
+        );
+
+      for (const task of stuckTasks) {
+        if (!task.assignedAgent) continue;
+        const agentState = this.agents.get(task.assignedAgent);
+        if (agentState && (agentState.status === 'idle' || agentState.status === 'error') && !this.dispatchingTasks.has(task.id)) {
+          console.log(`[Watchdog] Recovering stuck task ${task.id} (agent ${task.assignedAgent} is ${agentState.status})`);
+          this.db.run(
+            sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${task.id}`,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('[Watchdog] Error:', err instanceof Error ? err.message : err);
+    }
   }
 
   // -------------------------------------------------------------------------
