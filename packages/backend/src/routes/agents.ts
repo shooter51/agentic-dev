@@ -10,6 +10,7 @@ interface UpdateAgentBody {
 }
 
 export default async function agentRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const repo = new AgentRepository(db);
 
   // List all agents with status
@@ -52,6 +53,12 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
     if (!agent) {
       return reply.code(404).send({ error: 'Agent not found' });
     }
+
+    // Clear error message on resume
+    await db
+      .update(agentsTable)
+      .set({ lastError: null, updatedAt: new Date().toISOString() })
+      .where(eq(agentsTable.id, id));
 
     const orchestrator = (fastify as any).orchestrator;
     if (orchestrator) {

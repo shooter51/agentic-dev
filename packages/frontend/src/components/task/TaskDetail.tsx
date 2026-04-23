@@ -38,9 +38,9 @@ export function TaskDetail() {
           )}
         </SheetHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {task && (
-            <Tabs defaultValue="details" className="flex-1 flex flex-col">
+            <Tabs defaultValue="details" className="flex-1 min-h-0 flex flex-col">
               <TabsList className="mx-6 mt-4 self-start">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
@@ -50,7 +50,7 @@ export function TaskDetail() {
 
               <TabsContent
                 value="details"
-                className="flex-1 px-6 py-4 overflow-y-auto"
+                className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
               >
                 <div className="space-y-4">
                   {task.assignedAgent && (
@@ -111,21 +111,21 @@ export function TaskDetail() {
 
               <TabsContent
                 value="history"
-                className="flex-1 px-6 py-4 overflow-y-auto"
+                className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
               >
                 <TaskHistory taskId={task.id} />
               </TabsContent>
 
               <TabsContent
                 value="messages"
-                className="flex-1 px-6 py-4 overflow-y-auto"
+                className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
               >
                 <CommunicationFeed taskId={task.id} />
               </TabsContent>
 
               <TabsContent
                 value="artifacts"
-                className="flex-1 px-6 py-4 overflow-y-auto"
+                className="flex-1 min-h-0 px-6 py-4 overflow-y-auto"
               >
                 <div className="space-y-6">
                   <div>

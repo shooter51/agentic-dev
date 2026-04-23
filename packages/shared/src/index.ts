@@ -10,3 +10,4 @@ export * from './types/tools';
 export * from './types/api-call';
 export * from './types/events';
 export * from './types/api';
+export * from './types/auth';

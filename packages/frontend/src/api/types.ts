@@ -26,7 +26,7 @@ export interface TaskHistoryEvent {
   createdAt: string;
 }
 
-export type AgentStatus = "idle" | "busy" | "error" | "paused";
+export type AgentStatus = "idle" | "busy" | "working" | "error" | "paused";
 
 export interface Agent {
   id: string;
@@ -34,6 +34,7 @@ export interface Agent {
   role: string;
   status: AgentStatus;
   currentTaskId?: string;
+  lastError?: string;
   lastHeartbeat?: string;
 }
 

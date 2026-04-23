@@ -7,3 +7,6 @@ export * from './handoffs';
 export * from './task-history';
 export * from './deliverables';
 export * from './api-calls';
+export * from './users';
+export * from './refresh-tokens';
+export * from './auth-audit-log';

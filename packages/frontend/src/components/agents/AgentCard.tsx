@@ -9,11 +9,12 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Agent } from "@/api/types";
 
 const STATUS_BADGE: Record<
-  Agent["status"],
+  string,
   { label: string; className: string }
 > = {
   idle: { label: "Idle", className: "bg-gray-100 text-gray-600" },
   busy: { label: "Busy", className: "bg-blue-100 text-blue-700" },
+  working: { label: "Working", className: "bg-blue-100 text-blue-700" },
   error: { label: "Error", className: "bg-red-100 text-red-700" },
   paused: { label: "Paused", className: "bg-yellow-100 text-yellow-700" },
 };
@@ -38,7 +39,7 @@ export function AgentCard({ agent }: AgentCardProps) {
           <span
             className={cn(
               "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white",
-              agent.status === "busy" && "bg-blue-500",
+              (agent.status === "busy" || agent.status === "working") && "bg-blue-500",
               agent.status === "idle" && "bg-green-500",
               agent.status === "error" && "bg-red-500",
               agent.status === "paused" && "bg-yellow-500"
@@ -69,6 +70,11 @@ export function AgentCard({ agent }: AgentCardProps) {
               Working on: {agent.currentTaskId}
             </button>
           )}
+          {agent.status === "error" && agent.lastError && (
+            <p className="text-xs text-red-500 mt-1 line-clamp-2" title={agent.lastError}>
+              {agent.lastError}
+            </p>
+          )}
         </div>
 
         <div className="flex-shrink-0 flex items-center gap-1">
@@ -85,7 +91,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               <ChevronRight className="w-3.5 h-3.5" />
             )}
           </Button>
-          {agent.status === "paused" ? (
+          {agent.status === "paused" || agent.status === "error" ? (
             <Button
               size="sm"
               variant="outline"
@@ -93,9 +99,9 @@ export function AgentCard({ agent }: AgentCardProps) {
               onClick={() => resume.mutate(agent.id)}
               disabled={resume.isPending}
             >
-              Resume
+              {agent.status === "error" ? "Retry" : "Resume"}
             </Button>
-          ) : agent.status !== "error" ? (
+          ) : (
             <Button
               size="sm"
               variant="ghost"
@@ -105,7 +111,7 @@ export function AgentCard({ agent }: AgentCardProps) {
             >
               Pause
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
 

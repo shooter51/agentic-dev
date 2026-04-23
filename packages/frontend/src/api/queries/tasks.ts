@@ -10,6 +10,7 @@ export function useBoard(projectId: string) {
         `/api/projects/${projectId}/board`
       ),
     refetchOnWindowFocus: true,
+    refetchInterval: 5_000,
   });
 }
 

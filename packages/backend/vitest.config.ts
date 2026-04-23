@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: { NODE_ENV: 'production' },
     include: ['src/**/*.test.ts'],
     coverage: {
       provider: 'v8',
@@ -28,10 +29,22 @@ export default defineConfig({
         'src/pipeline/guards.ts',
         'src/pipeline/fsm.ts',
         'src/pipeline/transitions.ts',
+        'src/db/repositories/project.repository.ts',
         'src/db/repositories/task.repository.ts',
         'src/db/repositories/message.repository.ts',
         'src/db/repositories/memory.repository.ts',
         'src/db/test-helpers.ts',
+        // Auth module
+        'src/auth/tokens.ts',
+        'src/auth/key-ring.ts',
+        'src/auth/password.ts',
+        'src/auth/errors.ts',
+        'src/auth/config.ts',
+        'src/auth/audit.ts',
+        'src/auth/rate-limit.ts',
+        'src/auth/auth.service.ts',
+        'src/auth/auth.plugin.ts',
+        'src/auth/principal.ts',
       ],
       exclude: ['src/**/*.test.ts'],
       thresholds: {

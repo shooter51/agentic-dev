@@ -9,6 +9,7 @@ interface UpdateMemoryBody {
 }
 
 export default async function memoriesRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const repo = new MemoryRepository(db);
   const manager = new MemoryManager(db);
 

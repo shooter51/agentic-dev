@@ -6,3 +6,6 @@ export * from './message.repository';
 export * from './handoff.repository';
 export * from './deliverable.repository';
 export * from './api-call.repository';
+export * from './user.repository';
+export * from './refresh-token.repository';
+export * from './auth-audit.repository';

@@ -15,6 +15,10 @@ export class ProjectRepository {
     return this.db.select().from(projects).orderBy(asc(projects.name));
   }
 
+  async findByPath(path: string): Promise<Project | null> {
+    return this.db.select().from(projects).where(eq(projects.path, path)).get() ?? null;
+  }
+
   async create(data: Omit<NewProject, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
     const id = ulid();
     const now = new Date().toISOString();

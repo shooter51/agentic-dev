@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import authRoutes from './auth.js';
 import projectRoutes from './projects.js';
 import taskRoutes from './tasks.js';
 import agentRoutes from './agents.js';
@@ -14,6 +15,13 @@ import helpRoute from './help.js';
  * Called once during server startup.
  */
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+  // Health check — no auth required
+  fastify.get('/health', async () => ({ status: 'ok' }));
+
+  // Auth routes registered first (login/refresh are public)
+  await fastify.register(authRoutes);
+
+  // All other routes require authentication (via addHook in each plugin)
   await fastify.register(projectRoutes);
   await fastify.register(taskRoutes);
   await fastify.register(agentRoutes);

@@ -18,6 +18,7 @@ interface HelpChatBody {
 const NAV_PATTERN = /\[\[nav:(\w+)\]\]/g;
 
 export default async function helpRoute(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   // Pre-load articles at plugin registration time
   const articles = await loadArticles();
 

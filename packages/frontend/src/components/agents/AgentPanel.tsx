@@ -1,11 +1,10 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentCard } from "./AgentCard";
 import { useAgents } from "@/api/queries/agents";
 
 export function AgentPanel() {
   const { data: agents, isLoading } = useAgents();
 
-  const busyAgents = agents?.filter((a) => a.status === "busy") ?? [];
+  const busyAgents = agents?.filter((a) => a.status === "busy" || a.status === "working") ?? [];
   const idleAgents = agents?.filter((a) => a.status === "idle") ?? [];
   const errorAgents = agents?.filter((a) => a.status === "error") ?? [];
   const pausedAgents = agents?.filter((a) => a.status === "paused") ?? [];
@@ -21,7 +20,7 @@ export function AgentPanel() {
         )}
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-3 flex flex-col gap-2">
           {isLoading && (
             <p className="text-sm text-gray-400 text-center py-4">
@@ -79,7 +78,7 @@ export function AgentPanel() {
             </p>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

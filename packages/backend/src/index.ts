@@ -3,9 +3,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { sql } from 'drizzle-orm';
 import { db } from './db/index.js';
-import { seedAgents } from './db/seed.js';
+import { seedAgents, seedOperatorUser } from './db/seed.js';
 import { SSEBroadcaster } from './sse/broadcaster.js';
 import { orchestratorPlugin } from './orchestrator/index.js';
 import { registerRoutes } from './routes/index.js';
@@ -14,6 +16,8 @@ import { HandoffService } from './messaging/index.js';
 import { TaskPipeline } from './pipeline/index.js';
 import { MemoryManager } from './memory/index.js';
 import { ToolExecutor } from './tools/index.js';
+import { loadAuthConfig } from './auth/config.js';
+import { authPlugin } from './auth/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +35,9 @@ const HELP_MODEL_ID = process.env['HELP_MODEL_ID'] ?? 'claude-sonnet-4-6';
 // ---------------------------------------------------------------------------
 
 async function start() {
+  // Load auth config early — fail-fast if env vars missing
+  const authConfig = loadAuthConfig();
+
   const server = Fastify({ logger: true });
 
   // -- Config decorator -------------------------------------------------------
@@ -43,15 +50,21 @@ async function start() {
 
   // -- CORS -------------------------------------------------------------------
   await server.register(cors, {
-    origin: ['http://localhost:5173'],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // -- DB migrations ----------------------------------------------------------
   migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
 
+  // Manual migration: add last_error column if not exists
+  try {
+    (db as any).run(sql`ALTER TABLE agents ADD COLUMN last_error TEXT`);
+  } catch { /* column already exists */ }
+
   // -- DB seed ----------------------------------------------------------------
   await seedAgents(db);
+  await seedOperatorUser(db);
 
   // -- Service instantiation --------------------------------------------------
   const sseBroadcaster = new SSEBroadcaster();
@@ -76,6 +89,13 @@ async function start() {
   server.decorate('handoffService', handoffService);
   server.decorate('messageBus', messageBus);
 
+  // -- Rate limiter (global: false — per-route opt-in) -----------------------
+  await server.register(rateLimit, { global: false });
+
+  // -- Auth plugin ------------------------------------------------------------
+  server.decorate('authConfig', authConfig);
+  await server.register(authPlugin, { db, config: authConfig });
+
   // -- Orchestrator plugin ----------------------------------------------------
   await server.register(orchestratorPlugin, {
     db,
@@ -95,7 +115,7 @@ async function start() {
 
   // -- Start ------------------------------------------------------------------
   try {
-    await server.listen({ port: PORT, host: '127.0.0.1' });
+    await server.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     server.log.error(err);
     process.exit(1);

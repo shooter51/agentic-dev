@@ -11,6 +11,7 @@ interface OperatorMessageBody {
 }
 
 export default async function messageRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('preHandler', fastify.authenticate);
   const repo = new MessageRepository(db);
 
   // Get all messages for a task
