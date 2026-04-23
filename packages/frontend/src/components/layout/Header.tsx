@@ -5,6 +5,8 @@ import { useAgents } from "@/api/queries/agents";
 import { usePendingMessages } from "@/api/queries/messages";
 import { useProjects } from "@/api/queries/projects";
 import { CreateTaskDialog } from "@/components/board/CreateTaskDialog";
+import { CreateProjectDialog } from "@/components/board/CreateProjectDialog";
+import { ImportProjectDialog } from "@/components/board/ImportProjectDialog";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutList, BarChart2, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,6 +75,8 @@ export function Header() {
           ))}
         </select>
 
+        <CreateProjectDialog />
+        <ImportProjectDialog />
         <CreateTaskDialog />
       </div>
 
