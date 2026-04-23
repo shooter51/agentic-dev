@@ -60,7 +60,7 @@ export class BeadsCreateHandler implements ToolHandler {
 
     const item: BeadsItem = {
       id,
-      projectId: ctx.taskId, // associate with current task's project context
+      projectId: ctx.projectId,
       title,
       description,
       status: 'open',

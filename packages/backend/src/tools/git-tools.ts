@@ -79,8 +79,8 @@ export class GitCommitHandler implements ToolHandler {
       throw new Error('Commit message is required');
     }
 
-    // Stage all changes then commit
-    await runGit(['add', '-A'], ctx.repoPath);
+    // Stage tracked/modified files only (not untracked) to avoid staging .env or secrets
+    await runGit(['add', '-u'], ctx.repoPath);
     return runGit(['commit', '-m', message], ctx.repoPath);
   }
 }

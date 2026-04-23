@@ -21,9 +21,9 @@ export const STAGES = [
 export type Stage = (typeof STAGES)[number];
 
 export const STAGE_GROUPS: Record<string, string[]> = {
-  Build: ["todo", "product", "architecture", "development"],
-  QA: ["tech_lead_review", "manual_qa", "automation"],
-  Deploy: ["devops_build", "documentation", "devops_deploy", "arch_review", "done"],
+  Build: ["todo", "product", "architecture", "development", "tech_lead_review", "devops_build"],
+  QA: ["manual_qa", "automation"],
+  Deploy: ["documentation", "devops_deploy", "arch_review", "done"],
 };
 
 export function findTask(

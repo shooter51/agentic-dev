@@ -1,32 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiCallRepository } from '../db/repositories/api-call.repository.js';
 import { AgentRepository } from '../db/repositories/agent.repository.js';
 import { db } from '../db/index.js';
 import { apiCalls } from '../db/schema/api-calls.js';
-import { eq, sql, sum } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { CostTracker } from '../orchestrator/cost-tracker.js';
 
-// Approximate pricing per million tokens (Anthropic claude-3-5-sonnet defaults)
-const COST_PER_M_INPUT = 3.0;
-const COST_PER_M_OUTPUT = 15.0;
-const COST_PER_M_CACHE_READ = 0.3;
-const COST_PER_M_CACHE_WRITE = 3.75;
-
-function computeCostUsd(
-  inputTokens: number,
-  outputTokens: number,
-  cacheReadTokens: number,
-  cacheWriteTokens: number,
-): number {
-  return (
-    (inputTokens / 1_000_000) * COST_PER_M_INPUT +
-    (outputTokens / 1_000_000) * COST_PER_M_OUTPUT +
-    (cacheReadTokens / 1_000_000) * COST_PER_M_CACHE_READ +
-    (cacheWriteTokens / 1_000_000) * COST_PER_M_CACHE_WRITE
-  );
-}
+const costTracker = new CostTracker(db);
 
 export default async function statsRoutes(fastify: FastifyInstance): Promise<void> {
-  const apiCallRepo = new ApiCallRepository(db);
   const agentRepo = new AgentRepository(db);
 
   // Cost summary — per agent and overall
@@ -35,17 +16,26 @@ export default async function statsRoutes(fastify: FastifyInstance): Promise<voi
 
     const perAgent = await Promise.all(
       allAgents.map(async (agent) => {
-        const tokens = await apiCallRepo.getTokenSummaryByAgent(agent.id);
+        // Fetch all call records for this agent to compute cost using per-model pricing
+        const calls = await db
+          .select()
+          .from(apiCalls)
+          .where(eq(apiCalls.agentId, agent.id));
+
+        const inputTokens = calls.reduce((s, c) => s + c.inputTokens, 0);
+        const outputTokens = calls.reduce((s, c) => s + c.outputTokens, 0);
+        const cacheReadTokens = calls.reduce((s, c) => s + c.cacheReadTokens, 0);
+        const cacheWriteTokens = calls.reduce((s, c) => s + c.cacheWriteTokens, 0);
+        const estimatedCostUsd = calls.reduce((s, c) => s + costTracker.calculateCost(c), 0);
+
         return {
           agentId: agent.id,
           role: agent.role,
-          ...tokens,
-          estimatedCostUsd: computeCostUsd(
-            tokens.inputTokens,
-            tokens.outputTokens,
-            tokens.cacheReadTokens,
-            tokens.cacheWriteTokens,
-          ),
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
+          estimatedCostUsd,
         };
       }),
     );

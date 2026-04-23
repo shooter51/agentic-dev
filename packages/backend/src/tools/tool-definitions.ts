@@ -366,7 +366,7 @@ const ALL_TOOL_DEFINITIONS: Record<string, Tool> = {
         },
         type: {
           type: 'string',
-          enum: ['fact', 'decision', 'preference', 'context'],
+          enum: ['project', 'pattern', 'decision', 'teammate', 'feedback'],
           description: 'Memory type',
         },
         project_id: {
@@ -413,7 +413,7 @@ const ALL_TOOL_DEFINITIONS: Record<string, Tool> = {
         },
         type: {
           type: 'string',
-          enum: ['fact', 'decision', 'preference', 'context'],
+          enum: ['project', 'pattern', 'decision', 'teammate', 'feedback'],
           description: 'New type',
         },
       },

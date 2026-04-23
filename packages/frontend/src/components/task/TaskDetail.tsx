@@ -5,6 +5,9 @@ import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 import { TaskHistory } from "./TaskHistory";
+import { QualityGateStatus } from "./QualityGateStatus";
+import { HandoffViewer } from "./HandoffViewer";
+import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
 import { useTask } from "@/api/queries/tasks";
 import { useUIStore } from "@/stores/ui-store";
@@ -42,6 +45,7 @@ export function TaskDetail() {
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
                 <TabsTrigger value="messages">Messages</TabsTrigger>
+                <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
               </TabsList>
 
               <TabsContent
@@ -92,6 +96,16 @@ export function TaskDetail() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Quality Gates */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Quality Gates
+                    </label>
+                    <div className="mt-2">
+                      <QualityGateStatus metadata={(task as any).metadata ?? null} />
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
 
@@ -107,6 +121,26 @@ export function TaskDetail() {
                 className="flex-1 px-6 py-4 overflow-y-auto"
               >
                 <CommunicationFeed taskId={task.id} />
+              </TabsContent>
+
+              <TabsContent
+                value="artifacts"
+                className="flex-1 px-6 py-4 overflow-y-auto"
+              >
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Handoffs
+                    </h3>
+                    <HandoffViewer taskId={task.id} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Deliverables
+                    </h3>
+                    <DeliverableList taskId={task.id} />
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           )}

@@ -115,7 +115,16 @@ export class SearchFilesHandler implements ToolHandler {
     this.sandbox.validatePath(searchDir, ctx.repoPath);
 
     const fullSearchDir = path.join(ctx.repoPath, searchDir);
-    const regex = new RegExp(pattern);
+    let regex: RegExp;
+    try {
+      regex = new RegExp(pattern);
+    } catch {
+      return `Invalid regex pattern: ${pattern}`;
+    }
+    // Guard against catastrophic backtracking — reject patterns with nested quantifiers
+    if (/(\+|\*|\{)\S*(\+|\*|\{)/.test(pattern)) {
+      return `Pattern rejected: nested quantifiers may cause excessive backtracking`;
+    }
     const results: string[] = [];
 
     await this.searchRecursive(fullSearchDir, ctx.repoPath, regex, results);

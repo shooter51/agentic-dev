@@ -6,6 +6,7 @@ export interface ToolContext {
   agentId: string;
   agentRole: string;
   taskId: string;
+  projectId: string;
   /** Absolute path to the target repository on disk */
   repoPath: string;
 }

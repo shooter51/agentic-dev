@@ -12,6 +12,7 @@ const FILTER_TYPES: Array<{ value: MessageType | "all"; label: string }> = [
   { value: "clarification", label: "Clarifications" },
   { value: "rejection", label: "Rejections" },
   { value: "notification", label: "Notifications" },
+  { value: "response", label: "Responses" },
 ];
 
 interface ThreadGroup {
@@ -40,6 +41,12 @@ function groupIntoThreads(messages: Message[]): ThreadGroup[] {
     result.push({ id: msg.id, messages: [msg] });
   }
 
+  result.sort((a, b) => {
+    const aMin = Math.min(...a.messages.map((m) => new Date(m.createdAt).getTime()));
+    const bMin = Math.min(...b.messages.map((m) => new Date(m.createdAt).getTime()));
+    return aMin - bMin;
+  });
+
   return result;
 }
 
@@ -59,8 +66,9 @@ export function CommunicationFeed({ taskId }: CommunicationFeedProps) {
       : (messages ?? []).filter((m) => m.type === filterType);
 
   const threads = groupIntoThreads(filtered);
+  const allThreads = groupIntoThreads(messages ?? []);
   const threadedMessageIds = new Set(
-    threads.flatMap((t) => t.messages.map((m) => m.id))
+    allThreads.flatMap((t) => t.messages.map((m) => m.id))
   );
 
   const unresolvedPending = (messages ?? []).filter(

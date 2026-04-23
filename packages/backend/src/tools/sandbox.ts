@@ -128,6 +128,11 @@ export class Sandbox {
    * - Documentation Agent: only docs category.
    */
   validateCommand(command: string, agentRole: string): string {
+    // 0. Reject shell metacharacters that could chain or inject commands
+    if (/[;|&`$]/.test(command) || /\$\(/.test(command)) {
+      throw new SandboxError(`Shell metacharacters not allowed: ${command}`);
+    }
+
     // 1. Check denylist
     for (const pattern of DENIED_COMMANDS) {
       if (pattern.test(command)) {

@@ -2,7 +2,10 @@ import { useState, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
+  PointerSensor,
   closestCenter,
+  useSensor,
+  useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -25,6 +28,10 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   const queryClient = useQueryClient();
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const compactMode = useUIStore((s) => s.compactMode);
   const setCollapsedColumns = useUIStore((s) => s.setCollapsedColumns);
@@ -77,6 +84,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   return (
     <div className="flex gap-0 overflow-x-auto h-full p-4 snap-x snap-mandatory">
       <DndContext
+        sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

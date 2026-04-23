@@ -1,14 +1,12 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/ui-store";
 import { useAgents } from "@/api/queries/agents";
 import { usePendingMessages } from "@/api/queries/messages";
+import { useProjects } from "@/api/queries/projects";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutList, BarChart2, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const PROJECTS = [
-  { id: "all", label: "All Projects" },
-];
 
 export function Header() {
   const location = useLocation();
@@ -21,6 +19,14 @@ export function Header() {
 
   const { data: agents } = useAgents();
   const { data: pending } = usePendingMessages();
+  const { data: projects } = useProjects();
+
+  // Auto-select first project if none selected
+  useEffect(() => {
+    if (!selectedProject && projects && projects.length > 0) {
+      setSelectedProject(projects[0].id);
+    }
+  }, [selectedProject, projects, setSelectedProject]);
 
   const errorCount = agents?.filter((a) => a.status === "error").length ?? 0;
   const pendingCount = pending?.length ?? 0;
@@ -58,9 +64,10 @@ export function Header() {
           value={selectedProject ?? "all"}
           onChange={(e) => setSelectedProject(e.target.value === "all" ? null : e.target.value)}
         >
-          {PROJECTS.map((p) => (
+          <option value="all">All Projects</option>
+          {projects?.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.label}
+              {p.name}
             </option>
           ))}
         </select>

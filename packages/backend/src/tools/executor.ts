@@ -134,6 +134,7 @@ export class ToolExecutor {
         agentId: agent.id,
         agentRole: agent.role,
         taskId: task.id,
+        projectId: task.projectId,
         repoPath,
       });
 

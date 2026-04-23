@@ -35,15 +35,12 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(404).send({ error: 'Agent not found' });
     }
 
-    await repo.updateStatus(id, 'paused');
-
-    (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.AGENT_STATUS, {
-      taskId: agent.currentTask ?? '',
-      projectId: '',
-      agentId: id,
-      status: 'paused',
-      timestamp: new Date().toISOString(),
-    });
+    const orchestrator = (fastify as any).orchestrator;
+    if (orchestrator) {
+      await orchestrator.pauseAgent(id);
+    } else {
+      await repo.updateStatus(id, 'paused');
+    }
 
     return { success: true };
   });
@@ -56,15 +53,12 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(404).send({ error: 'Agent not found' });
     }
 
-    await repo.updateStatus(id, 'idle');
-
-    (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.AGENT_STATUS, {
-      taskId: agent.currentTask ?? '',
-      projectId: '',
-      agentId: id,
-      status: 'idle',
-      timestamp: new Date().toISOString(),
-    });
+    const orchestrator = (fastify as any).orchestrator;
+    if (orchestrator) {
+      await orchestrator.resumeAgent(id);
+    } else {
+      await repo.updateStatus(id, 'idle');
+    }
 
     return { success: true };
   });

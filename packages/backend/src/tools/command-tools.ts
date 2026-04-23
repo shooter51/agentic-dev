@@ -6,6 +6,18 @@ import type { Sandbox } from './sandbox';
 import type { DB } from '../db';
 import { tasks as tasksTable } from '../db/schema/tasks';
 
+const SENSITIVE_ENV_PATTERNS = [/KEY/i, /SECRET/i, /TOKEN/i, /PASSWORD/i, /CREDENTIAL/i];
+
+function sanitizeEnv(): Record<string, string> {
+  const clean: Record<string, string> = { CI: 'true' };
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    if (SENSITIVE_ENV_PATTERNS.some((p) => p.test(k))) continue;
+    clean[k] = v;
+  }
+  return clean;
+}
+
 // ---------------------------------------------------------------------------
 // Internal result type from test output parsing
 // ---------------------------------------------------------------------------
@@ -48,7 +60,7 @@ export class RunCommandHandler implements ToolHandler {
     return new Promise((resolve, reject) => {
       const child = spawn(cmd, args, {
         cwd: ctx.repoPath,
-        env: { ...process.env, CI: 'true' },
+        env: sanitizeEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

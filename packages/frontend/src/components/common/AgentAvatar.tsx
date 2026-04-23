@@ -69,9 +69,9 @@ function inferRoleFromId(agentId: string): string {
   const lower = agentId.toLowerCase();
   if (lower.includes("product")) return "product";
   if (lower.includes("arch")) return "architect";
+  if (lower.includes("devops") || lower.includes("deploy")) return "devops";
   if (lower.includes("dev")) return "developer";
   if (lower.includes("tech")) return "tech_lead";
   if (lower.includes("qa") || lower.includes("test")) return "qa";
-  if (lower.includes("devops") || lower.includes("deploy")) return "devops";
   return "default";
 }

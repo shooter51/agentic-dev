@@ -37,6 +37,8 @@ const ROLE_TOOLS: Record<string, string[]> = {
   Architect: [
     ...UNIVERSAL_TOOLS,
     'write_file', // restricted to docs/ — enforced in WriteFileHandler
+    'git_status',
+    'git_branch',
     'beads_list',
   ],
 

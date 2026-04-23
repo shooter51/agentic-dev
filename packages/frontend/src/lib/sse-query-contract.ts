@@ -6,6 +6,7 @@ export const SSE_QUERY_MAP: Record<string, QueryKeyFn> = {
     return [
       ["tasks", d.taskId],
       ["board", d.projectId ?? "all"],
+      ["task-history", d.taskId],
     ];
   },
   "agent-status": (data) => {

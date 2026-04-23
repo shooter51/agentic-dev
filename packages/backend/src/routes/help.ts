@@ -34,7 +34,7 @@ export default async function helpRoute(fastify: FastifyInstance): Promise<void>
       .join('\n\n---\n\n');
 
     const modelId: string =
-      (fastify as any).config?.helpModelId ?? 'claude-3-5-haiku-20241022';
+      (fastify as any).config?.HELP_MODEL_ID ?? 'claude-3-5-haiku-20241022';
 
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({

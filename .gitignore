@@ -3,3 +3,7 @@ dist/
 *.db
 .env
 data/
+coverage/
+.vitest/
+playwright-report/
+test-results/

@@ -70,6 +70,12 @@ async function start() {
     memoryManager,
   );
 
+  // -- Service decorators -----------------------------------------------------
+  server.decorate('pipeline', pipeline);
+  server.decorate('memoryManager', memoryManager);
+  server.decorate('handoffService', handoffService);
+  server.decorate('messageBus', messageBus);
+
   // -- Orchestrator plugin ----------------------------------------------------
   await server.register(orchestratorPlugin, {
     db,
@@ -81,12 +87,15 @@ async function start() {
     sseBroadcaster,
   });
 
+  // -- Recover pending messages after orchestrator is initialized -------------
+  await messageBus.recoverPendingMessages();
+
   // -- Routes -----------------------------------------------------------------
   await registerRoutes(server);
 
   // -- Start ------------------------------------------------------------------
   try {
-    await server.listen({ port: PORT, host: '0.0.0.0' });
+    await server.listen({ port: PORT, host: '127.0.0.1' });
   } catch (err) {
     server.log.error(err);
     process.exit(1);

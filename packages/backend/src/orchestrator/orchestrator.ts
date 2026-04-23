@@ -12,10 +12,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
+import fs from 'fs/promises';
+import path from 'path';
 import type { AgentIdentity, AgentState, AgentStatus } from '@agentic-dev/shared';
 import type { DB } from '../db';
 import { agents as agentsTable } from '../db/schema/agents';
 import { messages } from '../db/schema/messages';
+import { projects } from '../db/schema/projects';
 import type { Task } from '../db/schema/tasks';
 import type { TaskPipeline } from '../pipeline';
 import type { MessageBus } from '../messaging';
@@ -136,6 +139,9 @@ export class Orchestrator {
   private readonly taskRepo: TaskRepository;
   private readonly agentRepo: AgentRepository;
   private readonly handoffRepo: HandoffRepository;
+
+  /** Tracks tasks currently being dispatched to prevent double-dispatch */
+  private readonly dispatchingTasks = new Set<string>();
   private readonly memoryRepo: MemoryRepository;
   private readonly messageRepo: MessageRepository;
 
@@ -404,19 +410,28 @@ export class Orchestrator {
 
     // 2. For each ready task, find an available agent in the correct lane
     for (const task of readyTasks) {
+      // Skip tasks already being dispatched (prevents race between cycles)
+      if (this.dispatchingTasks.has(task.id)) continue;
+
       const agent = this.findAvailableAgent(task.stage);
       if (!agent) continue; // All agents in this lane are busy
 
-      // 3. Acquire semaphore slot (blocks if at max concurrent API calls)
+      // 3. Mark task as dispatching in-memory BEFORE the async semaphore wait
+      this.dispatchingTasks.add(task.id);
+
+      // 4. Acquire semaphore slot (blocks if at max concurrent API calls)
       await this.semaphore.acquire(task.priority);
 
-      // 4. Mark task as assigned before dispatching to prevent double-dispatch
+      // 5. Mark task as assigned in DB
       await this.taskRepo.updateStage(task.id, task.stage, agent.id);
 
-      // 5. Dispatch non-blocking — semaphore released in finally
+      // 6. Dispatch non-blocking — semaphore released in finally
       this.dispatchTask(agent.id, task.id)
         .catch((err) => this.handleAgentError(agent.id, task.id, err))
-        .finally(() => this.semaphore.release());
+        .finally(() => {
+          this.dispatchingTasks.delete(task.id);
+          this.semaphore.release();
+        });
     }
 
     // 6. Route any pending messages
@@ -514,10 +529,20 @@ export class Orchestrator {
   }
 
   private async loadProjectClaudeMd(projectId: string): Promise<string | null> {
-    // Projects can store CLAUDE.md content in their metadata or a dedicated field.
-    // This is a placeholder — real implementation reads from the project repo path.
-    // For now, return null and let callers handle missing CLAUDE.md gracefully.
-    return null;
+    const project = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+
+    if (!project) return null;
+
+    const claudeMdPath = path.join(project.path, 'CLAUDE.md');
+    try {
+      return await fs.readFile(claudeMdPath, 'utf-8');
+    } catch {
+      return null;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -572,9 +597,16 @@ export class Orchestrator {
       agentState.conversationMessages = [];
     }
 
-    // Unassign task so it can be re-dispatched or reassigned
-    this.taskRepo.updateStage(taskId, 'development', undefined).catch((updateErr) => {
-      console.error(`[Orchestrator] Failed to unassign task ${taskId}:`, updateErr);
+    // Clear the assignedAgent on the task without changing its stage,
+    // so it can be re-dispatched from whatever stage it was in.
+    this.taskRepo.findById(taskId).then((task) => {
+      if (task) {
+        this.taskRepo.updateStage(taskId, task.stage, undefined).catch((updateErr) => {
+          console.error(`[Orchestrator] Failed to unassign task ${taskId}:`, updateErr);
+        });
+      }
+    }).catch((findErr) => {
+      console.error(`[Orchestrator] Failed to look up task ${taskId}:`, findErr);
     });
 
     this.setAgentStatus(agentId, 'error').catch((statusErr) => {
