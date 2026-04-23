@@ -172,7 +172,6 @@ export async function runAgentLoop(
   // Build claude CLI args
   const claudeBin = getClaudeBinaryPath();
   const args: string[] = [
-    '--print',
     '--output-format', 'stream-json',
     '--model', modelId,
     '--max-turns', '50',
@@ -198,8 +197,8 @@ export async function runAgentLoop(
     }));
   }
 
-  // The task prompt is passed as the user message (positional arg)
-  args.push(taskPrompt);
+  // The task prompt is passed via -p flag (required for --print mode)
+  args.push('-p', taskPrompt);
 
   return new Promise<AgentResult>((resolve, reject) => {
     const child = spawn(claudeBin, args, {
