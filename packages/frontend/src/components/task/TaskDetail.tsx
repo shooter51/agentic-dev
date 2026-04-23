@@ -11,6 +11,7 @@ import { QualityGateStatus } from "./QualityGateStatus";
 import { HandoffViewer } from "./HandoffViewer";
 import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
+import { TaskEditor } from "./TaskEditor";
 import { useTask } from "@/api/queries/tasks";
 import { useUIStore } from "@/stores/ui-store";
 
@@ -107,6 +108,9 @@ export function TaskDetail() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Edit (only for todo/product stages) */}
+                  <TaskEditor task={task} />
 
                   {/* Quality Gates */}
                   <div>
