@@ -59,7 +59,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
               onClick={() => onSelect?.(agent.id)}
               disabled={!onSelect}
             >
-              {agent.name}
+              {agent.name || agent.id}
             </button>
             <span
               className={cn(

@@ -60,7 +60,10 @@ export interface MessageThread {
 export interface Memory {
   id: string;
   agentId: string;
-  key: string;
-  value: string;
+  key?: string;
+  value?: string;
+  title?: string;
+  content?: string;
+  type?: string;
   updatedAt: string;
 }
