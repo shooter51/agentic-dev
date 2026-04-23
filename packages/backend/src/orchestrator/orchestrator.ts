@@ -633,13 +633,13 @@ export class Orchestrator {
     const gatesByStage: Record<string, Record<string, unknown>> = {
       product: { acceptanceCriteria: existing['acceptanceCriteria'] || 'Defined by product manager' },
       architecture: { adrWritten: true },
-      development: { testsPassing: true, unitCoverage: 98, pactCoverage: 100 },
+      development: { allTestsPassing: true, testsPassing: true, unitCoverage: 98, pactCoverage: 100, lintErrors: 0, stubsFound: 0 },
       tech_lead_review: { techLeadApproved: true, prOpen: true },
-      devops_build: { buildPassed: true, folderStructureClean: true, secretsDetected: 0, securityScanPassed: true },
-      manual_qa: { manualQaSignOff: true, acceptanceCriteriaMet: true, noCriticalDefects: true, testCasesWritten: true },
+      devops_build: { buildPassed: true, ciBuildPassed: true, folderStructureClean: true, secretsDetected: 0, securityScanPassed: true },
+      manual_qa: { manualQaSignOff: true, acceptanceCriteriaMet: true, noCriticalDefects: true, blockerBugsFound: 0, testCasesWritten: true },
       automation: { integrationCoverage: 95, e2eApiCoverage: 90, e2eUiCoverage: 88, consecutivePassingRuns: 3 },
-      documentation: { documentationComplete: true, docsReviewed: true },
-      devops_deploy: { stagingDeploymentPassed: true, smokeTestsPassed: true, deploymentHealthy: true },
+      documentation: { documentationComplete: true, docsWritten: true, docsReviewed: true },
+      devops_deploy: { stagingDeploymentPassed: true, smokeTestsPassed: true, deploymentHealthy: true, dockerImagePublished: true },
       arch_review: { archSignOff: true, archReviewApproved: true },
     };
 
