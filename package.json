@@ -1,0 +1,23 @@
+{
+  "name": "agentic-dev",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:backend": "npm -w packages/backend run dev",
+    "dev:frontend": "npm -w packages/frontend run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "npm run build --workspaces",
+    "typecheck": "tsc --build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
