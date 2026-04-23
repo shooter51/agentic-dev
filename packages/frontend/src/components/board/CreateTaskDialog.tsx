@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,9 +31,17 @@ export function CreateTaskDialog() {
   const selectedProject = useUIStore((s) => s.selectedProject);
   const queryClient = useQueryClient();
 
+  // Fall back to first project if "All Projects" is selected
+  const [projects, setProjects] = useState<Array<{id: string}>>([]);
+  const effectiveProject = selectedProject || projects[0]?.id || null;
+
+  useEffect(() => {
+    apiClient.get<Array<{id: string}>>("/api/projects").then(setProjects).catch(() => {});
+  }, []);
+
   const createTask = useMutation({
     mutationFn: (payload: CreateTaskPayload) =>
-      apiClient.post<Task>(`/api/projects/${selectedProject}/tasks`, payload),
+      apiClient.post<Task>(`/api/projects/${effectiveProject}/tasks`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["board"] });
       setOpen(false);
@@ -46,7 +54,7 @@ export function CreateTaskDialog() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !selectedProject) return;
+    if (!title.trim() || !effectiveProject) return;
     createTask.mutate({ title: title.trim(), description: description.trim() || undefined, priority, type });
   }
 
@@ -56,8 +64,8 @@ export function CreateTaskDialog() {
         <Button
           size="sm"
           className="gap-1.5"
-          disabled={!selectedProject}
-          title={!selectedProject ? "Select a project first" : "Create new task"}
+          disabled={!effectiveProject}
+          title={!effectiveProject ? "No projects available" : "Create new task"}
         >
           <Plus className="w-3.5 h-3.5" />
           New Task
