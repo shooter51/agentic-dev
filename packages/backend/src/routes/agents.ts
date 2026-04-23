@@ -94,4 +94,16 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
 
     return repo.findById(id);
   });
+
+  // Get all handoffs created by this agent
+  fastify.get('/api/agents/:id/handoffs', async (request, _reply) => {
+    const { id } = request.params as { id: string };
+    const { handoffs } = await import('../db/schema/handoffs.js');
+    const result = await db
+      .select()
+      .from(handoffs)
+      .where(eq(handoffs.fromAgent, id))
+      .orderBy(handoffs.createdAt);
+    return result;
+  });
 }

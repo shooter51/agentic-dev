@@ -33,7 +33,10 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
   const statusConfig = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+    <div
+      className="rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+      onClick={() => onSelect?.(agent.id)}
+    >
       <div className="flex items-start gap-3 p-3">
         <div className="relative flex-shrink-0">
           <AgentAvatar agentId={agent.id} role={agent.role} size="md" />
@@ -89,7 +92,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setExpanded(!expanded)}
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
             title={expanded ? "Collapse" : "Show memories"}
           >
             {expanded ? (
@@ -103,7 +106,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
               size="sm"
               variant="outline"
               className="text-xs h-7"
-              onClick={() => resume.mutate(agent.id)}
+              onClick={(e) => { e.stopPropagation(); resume.mutate(agent.id); }}
               disabled={resume.isPending}
             >
               Resume
@@ -113,7 +116,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
               size="sm"
               variant="outline"
               className="text-xs h-7 border-red-200 text-red-600 hover:bg-red-50"
-              onClick={() => resume.mutate(agent.id)}
+              onClick={(e) => { e.stopPropagation(); resume.mutate(agent.id); }}
               disabled={resume.isPending}
             >
               Retry
@@ -123,7 +126,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
               size="sm"
               variant="ghost"
               className="text-xs h-7"
-              onClick={() => pause.mutate(agent.id)}
+              onClick={(e) => { e.stopPropagation(); pause.mutate(agent.id); }}
               disabled={pause.isPending}
             >
               Pause
