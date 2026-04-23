@@ -614,17 +614,16 @@ export class Orchestrator {
       timestamp: new Date().toISOString(),
     });
 
-    // Clear the assignedAgent on the task without changing its stage,
-    // so it can be re-dispatched from whatever stage it was in.
-    this.taskRepo.findById(taskId).then((task) => {
-      if (task) {
-        this.taskRepo.updateStage(taskId, task.stage, undefined).catch((updateErr) => {
-          console.error(`[Orchestrator] Failed to unassign task ${taskId}:`, updateErr);
-        });
-      }
-    }).catch((findErr) => {
-      console.error(`[Orchestrator] Failed to look up task ${taskId}:`, findErr);
-    });
+    // Clear the assignedAgent on the task so it can be re-dispatched.
+    // Use direct SQL to guarantee it runs even if the repo layer has issues.
+    try {
+      this.db.run(
+        sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${taskId}`,
+      );
+      console.log(`[Orchestrator] Cleared assignedAgent on task ${taskId}`);
+    } catch (clearErr) {
+      console.error(`[Orchestrator] Failed to clear task assignment ${taskId}:`, clearErr);
+    }
 
     this.setAgentStatus(agentId, 'error').catch((statusErr) => {
       console.error(`[Orchestrator] Failed to set agent ${agentId} to error state:`, statusErr);
