@@ -4,6 +4,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useAgents } from "@/api/queries/agents";
 import { usePendingMessages } from "@/api/queries/messages";
 import { useProjects } from "@/api/queries/projects";
+import { CreateTaskDialog } from "@/components/board/CreateTaskDialog";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutList, BarChart2, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,8 @@ export function Header() {
             </option>
           ))}
         </select>
+
+        <CreateTaskDialog />
       </div>
 
       <div className="flex items-center gap-2">

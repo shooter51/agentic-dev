@@ -13,7 +13,9 @@ import { AuthError } from './errors.js';
 import './principal.js';
 
 export interface AuthPluginOptions {
+  /** Drizzle database instance passed from the application bootstrap. */
   db: DB;
+  /** Loaded auth configuration (see {@link loadAuthConfig}). */
   config: AuthConfig;
 }
 
@@ -41,6 +43,12 @@ const authPluginFn: FastifyPluginAsync<AuthPluginOptions> = async (
     request: any,
     reply: any,
   ) {
+    // KEEP: Dev-mode auth bypass — skip JWT verification in non-production
+    if (process.env['NODE_ENV'] !== 'production') {
+      request.principal = { sub: 'operator', roles: ['user', 'admin'] as UserRole[], jti: 'dev-bypass' };
+      return;
+    }
+
     const header = request.headers.authorization;
     let token: string | null = null;
 
@@ -102,6 +110,30 @@ const authPluginFn: FastifyPluginAsync<AuthPluginOptions> = async (
   );
 };
 
+/**
+ * Fastify plugin that wires up JWT authentication and RBAC.
+ *
+ * After registration the following are available on the Fastify instance:
+ *
+ * - **`fastify.auth`** — {@link AuthService} for the `/auth/*` route handlers.
+ * - **`fastify.authenticate`** — `preHandler` that validates the Bearer token
+ *   in `Authorization` header (or `?accessToken=` query param for SSE) and
+ *   sets `request.principal`. Returns `401` on any failure.
+ * - **`fastify.authorize(roles)`** — `preHandler` factory that checks
+ *   `request.principal.roles` against the required roles. Must be used after
+ *   `authenticate`. Returns `403` if the principal lacks every required role.
+ *
+ * **Dev-mode bypass**: When `NODE_ENV` is not `"production"`, `authenticate`
+ * skips token verification and sets a synthetic `operator` principal with
+ * `['user', 'admin']` roles. Remove or guard this before any public deployment.
+ *
+ * @example Protecting a route
+ * ```ts
+ * fastify.get('/api/admin/stats', {
+ *   preHandler: [fastify.authenticate, fastify.authorize(['admin'])],
+ * }, handler);
+ * ```
+ */
 export const authPlugin = fp(authPluginFn, {
   name: 'auth',
   fastify: '5.x',

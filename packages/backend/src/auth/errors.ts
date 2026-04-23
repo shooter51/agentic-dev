@@ -1,5 +1,25 @@
 import type { AuthErrorCode } from '@agentic-dev/shared';
 
+/**
+ * Typed authentication error.
+ *
+ * All auth failures are surfaced as `AuthError` so route handlers can produce
+ * a consistent machine-readable error envelope. Use the static factory methods
+ * rather than constructing directly.
+ *
+ * @example Route handler
+ * ```ts
+ * try {
+ *   const result = await fastify.auth.login(body);
+ *   reply.send(result);
+ * } catch (err) {
+ *   if (err instanceof AuthError) {
+ *     return reply.code(err.httpStatus).send(err.toBody());
+ *   }
+ *   throw err;
+ * }
+ * ```
+ */
 export class AuthError extends Error {
   constructor(
     public readonly code: AuthErrorCode,
@@ -39,6 +59,12 @@ export class AuthError extends Error {
     return new AuthError('INVALID_REQUEST', message, 400);
   }
 
+  /**
+   * Serialises the error to the standard API error envelope.
+   *
+   * The envelope is `{ error: { code, message, retryAfterSeconds? } }`.
+   * `retryAfterSeconds` is only included for `RATE_LIMITED` responses.
+   */
   toBody() {
     return {
       error: {

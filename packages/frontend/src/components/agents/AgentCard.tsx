@@ -9,11 +9,12 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Agent } from "@/api/types";
 
 const STATUS_BADGE: Record<
-  Agent["status"],
+  string,
   { label: string; className: string }
 > = {
   idle: { label: "Idle", className: "bg-gray-100 text-gray-600" },
   busy: { label: "Busy", className: "bg-blue-100 text-blue-700" },
+  working: { label: "Working", className: "bg-blue-100 text-blue-700" },
   error: { label: "Error", className: "bg-red-100 text-red-700" },
   paused: { label: "Paused", className: "bg-yellow-100 text-yellow-700" },
 };
@@ -38,7 +39,7 @@ export function AgentCard({ agent }: AgentCardProps) {
           <span
             className={cn(
               "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white",
-              agent.status === "busy" && "bg-blue-500",
+              (agent.status === "busy" || agent.status === "working") && "bg-blue-500",
               agent.status === "idle" && "bg-green-500",
               agent.status === "error" && "bg-red-500",
               agent.status === "paused" && "bg-yellow-500"

@@ -13,6 +13,13 @@ function sha256(data: string): string {
   return createHash('sha256').update(data).digest('hex');
 }
 
+/**
+ * Core authentication service.
+ *
+ * Handles the login, refresh, logout, and access-token verification flows.
+ * All security-sensitive decisions (timing-safe password comparison, reuse
+ * detection, token rotation) live here rather than in route handlers.
+ */
 export class AuthService {
   constructor(
     private readonly users: UserRepository,
@@ -23,6 +30,22 @@ export class AuthService {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
+  /**
+   * Authenticates a user with email and password.
+   *
+   * Issues a short-lived access token (default 15 min) and a rotating refresh
+   * token (default 14 days). The refresh token is stored as a SHA-256 hash in
+   * the database so a DB leak does not expose usable tokens.
+   *
+   * Timing is equalised for unknown-email vs wrong-password paths to prevent
+   * user enumeration.
+   *
+   * @throws {AuthError} `INVALID_CREDENTIALS` — wrong email, wrong password, or
+   *   the account status is not `active`. The same error code is returned for all
+   *   three cases to avoid information disclosure.
+   * @throws {AuthError} `RATE_LIMITED` — too many attempts from the same IP/email
+   *   within the configured window (enforced at the route layer).
+   */
   async login(input: {
     email: string;
     password: string;
@@ -85,6 +108,23 @@ export class AuthService {
     };
   }
 
+  /**
+   * Exchanges a refresh token for a new access + refresh token pair.
+   *
+   * Implements token rotation: the supplied refresh token is revoked and a new
+   * one is issued atomically. This limits the window of damage if a refresh
+   * token is stolen.
+   *
+   * **Reuse detection**: if the presented refresh token has already been
+   * revoked (i.e. it has been used before), all active refresh tokens for the
+   * affected user are immediately revoked and a `refresh_reuse_detected` audit
+   * event is emitted. This is the OAuth 2 Security BCP recommended pattern.
+   *
+   * @throws {AuthError} `INVALID_REFRESH_TOKEN` — signature invalid, token
+   *   expired, token revoked, unknown JTI, hash mismatch, wrong audience, or
+   *   reuse detected. All cases return the same error code to avoid leaking
+   *   which check failed.
+   */
   async refresh(input: {
     refreshToken: string;
     ip?: string;
@@ -184,6 +224,16 @@ export class AuthService {
     };
   }
 
+  /**
+   * Revokes the supplied refresh token.
+   *
+   * Idempotent: silently succeeds if the token is already revoked, expired, or
+   * unknown. This prevents a logout attempt from leaking token-state information
+   * to a caller.
+   *
+   * The route layer requires a valid access token (`authenticate` preHandler)
+   * so `actor` is always the authenticated principal.
+   */
   async logout(input: {
     refreshToken: string;
     actor: AuthPrincipal;
@@ -208,12 +258,23 @@ export class AuthService {
     });
   }
 
+  /** @deprecated Use {@link verifyAccessTokenAsync} — jose requires async verification. */
   verifyAccessToken(token: string): AuthPrincipal {
     // This is sync-looking but we need async for jose.jwtVerify
     // We'll handle this via a wrapper that caches the promise result
     throw new Error('Use verifyAccessTokenAsync instead');
   }
 
+  /**
+   * Verifies an access token and returns the decoded principal.
+   *
+   * Called by the `authenticate` Fastify preHandler on every protected request.
+   * Zero DB reads — verification is purely cryptographic (HS256 + claims check).
+   *
+   * @returns The authenticated principal (`sub`, `roles`, `jti`).
+   * @throws {AuthError} `INVALID_ACCESS_TOKEN` — signature invalid, token
+   *   expired, wrong audience, or unknown key ID.
+   */
   async verifyAccessTokenAsync(token: string): Promise<AuthPrincipal> {
     try {
       const { payload } = await this.keyRing.verify(token, {

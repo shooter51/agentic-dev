@@ -173,7 +173,7 @@ export class TaskPipeline {
       event: 'stage_change',
       fromValue: task.stage,
       toValue: 'cancelled',
-      agentId: 'operator',
+      agentId: undefined,
       details: JSON.stringify({ action: 'cancellation', reason }),
     });
 
@@ -214,7 +214,7 @@ export class TaskPipeline {
       event: 'stage_change',
       fromValue: previousStage,
       toValue: 'deferred',
-      agentId: 'operator',
+      agentId: undefined,
       details: JSON.stringify({ action: 'deferral', reason }),
     });
   }
@@ -375,7 +375,7 @@ export class TaskPipeline {
       event: row.event,
       fromValue: row.fromValue ?? null,
       toValue: row.toValue ?? null,
-      agentId: row.agentId ?? null,
+      agentId: (row.agentId === 'operator' ? null : row.agentId) ?? null,
       details: row.details ?? null,
       createdAt: new Date().toISOString(),
     });

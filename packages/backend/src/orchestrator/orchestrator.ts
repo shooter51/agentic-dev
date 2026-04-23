@@ -9,7 +9,6 @@
  *   - Repo mutex: one per target repo path (prevents concurrent git ops)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import fs from 'fs/promises';
@@ -34,8 +33,8 @@ import { AGENT_DEFINITIONS, getAgentsForStage } from './agent-registry';
 import { ConcurrencySemaphore } from './concurrency';
 import { CostTracker } from './cost-tracker';
 import { LoopDetector } from './loop-detector';
-import { buildInterruptSystemPrompt, type AgentContext } from './context-builder';
-import { runAgentWithErrorHandling, extractTextContent } from './agent-runner';
+import { type AgentContext } from './context-builder';
+import { runAgentWithErrorHandling } from './agent-runner';
 
 // ---------------------------------------------------------------------------
 // SSEBroadcaster — minimal interface; full implementation lives in the SSE
@@ -335,36 +334,15 @@ export class Orchestrator {
       throw new Error(`Message not found: ${messageId}`);
     }
 
-    // 4. Process the interrupt in a short API call
-    const agentDef = AGENT_DEFINITIONS.find((d) => d.id === agentId);
-    const modelId = agentState.model === 'opus' ? 'claude-opus-4-6' : 'claude-sonnet-4-6';
+    // 4. Acknowledge the message (interrupt is cooperative — the running CLI
+    //    subprocess will complete its current turn, and the message content
+    //    will be available to the agent on its next task pickup).
+    const interruptReply = `[Acknowledged] Message from ${message.fromAgent}: ${message.content.slice(0, 200)}`;
 
-    const anthropic = new Anthropic();
-    const interruptResponse = await anthropic.messages.create({
-      model: modelId,
-      max_tokens: 4096,
-      system: buildInterruptSystemPrompt(agentState),
-      messages: [{ role: 'user', content: message.content }],
-    });
-
-    // Track the interrupt API call
-    await this.costTracker.trackCall({
-      agentId,
-      taskId: agentState.currentTaskId ?? '',
-      model: interruptResponse.model,
-      inputTokens: interruptResponse.usage.input_tokens,
-      outputTokens: interruptResponse.usage.output_tokens,
-      cacheReadTokens: interruptResponse.usage.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: interruptResponse.usage.cache_creation_input_tokens ?? 0,
-      latencyMs: 0,
-      status: 'success',
-    });
-
-    // 5. Save the interrupt response to the message record
     await this.db
       .update(messages)
       .set({
-        response: extractTextContent(interruptResponse.content),
+        response: interruptReply,
         status: 'completed',
         respondedAt: new Date().toISOString(),
       })

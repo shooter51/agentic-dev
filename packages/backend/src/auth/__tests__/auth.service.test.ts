@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock, type Mocked } from 'vitest';
 import { AuthService } from '../auth.service.js';
 import { AuthError } from '../errors.js';
 import { KeyRing } from '../key-ring.js';
@@ -62,7 +62,7 @@ function makeRefreshTokenRow(
   };
 }
 
-function makeMockUserRepo(): jest.Mocked<UserRepository> {
+function makeMockUserRepo(): Mocked<UserRepository> {
   return {
     findByEmail: vi.fn(),
     findById: vi.fn(),
@@ -71,7 +71,7 @@ function makeMockUserRepo(): jest.Mocked<UserRepository> {
   } as any;
 }
 
-function makeMockRefreshRepo(): jest.Mocked<RefreshTokenRepository> {
+function makeMockRefreshRepo(): Mocked<RefreshTokenRepository> {
   return {
     findByJti: vi.fn(),
     create: vi.fn(),
@@ -81,7 +81,7 @@ function makeMockRefreshRepo(): jest.Mocked<RefreshTokenRepository> {
   } as any;
 }
 
-function makeMockAudit(): jest.Mocked<AuditWriter> {
+function makeMockAudit(): Mocked<AuditWriter> {
   return {
     log: vi.fn().mockResolvedValue(undefined),
   } as any;
