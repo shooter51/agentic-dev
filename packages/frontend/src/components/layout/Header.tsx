@@ -4,6 +4,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useAgents } from "@/api/queries/agents";
 import { usePendingMessages } from "@/api/queries/messages";
 import { useProjects } from "@/api/queries/projects";
+import { CreateProjectDialog } from "@/components/board/CreateProjectDialog";
 import { CreateTaskDialog } from "@/components/board/CreateTaskDialog";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutList, BarChart2, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
@@ -73,6 +74,7 @@ export function Header() {
           ))}
         </select>
 
+        <CreateProjectDialog />
         <CreateTaskDialog />
       </div>
 
