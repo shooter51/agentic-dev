@@ -95,9 +95,11 @@ function LiveOutput({ agentId }: { agentId: string }) {
     };
 
     es.addEventListener("agent-tool-call", handler);
+    es.addEventListener("agent-tool-use", handler);
 
     return () => {
       es.removeEventListener("agent-tool-call", handler);
+      es.removeEventListener("agent-tool-use", handler);
       es.close();
     };
   }, [agentId]);
