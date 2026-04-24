@@ -12,9 +12,13 @@ import { HandoffViewer } from "./HandoffViewer";
 import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
 import { TaskEditor } from "./TaskEditor";
-import { useTask } from "@/api/queries/tasks";
+import { useTask, useMoveTask } from "@/api/queries/tasks";
 import { useAgentModel } from "@/api/queries/agents";
 import { useUIStore } from "@/stores/ui-store";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
+import { RefreshCw, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function TaskDetail() {
   const selectedTask = useUIStore((s) => s.selectedTask);
@@ -66,6 +70,10 @@ export function TaskDetail() {
                       <PipelineProgress currentStage={task.stage} />
                     </div>
                   </div>
+
+                  {task.stage !== "done" && task.stage !== "todo" && (
+                    <TaskActions taskId={task.id} stage={task.stage} />
+                  )}
 
                   {task.assignedAgent && (
                     <div>
@@ -170,5 +178,51 @@ export function TaskDetail() {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function TaskActions({ taskId, stage }: { taskId: string; stage: string }) {
+  const queryClient = useQueryClient();
+
+  const retry = useMutation({
+    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/retry`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["task-history", taskId] });
+    },
+  });
+
+  const cancel = useMutation({
+    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/cancel`, { reason: "Cancelled by operator" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+    },
+  });
+
+  return (
+    <div className="flex gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-1 text-xs"
+        onClick={() => retry.mutate()}
+        disabled={retry.isPending}
+      >
+        <RefreshCw className="w-3 h-3" />
+        {retry.isPending ? "Retrying..." : "Reset & Retry"}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+        onClick={() => cancel.mutate()}
+        disabled={cancel.isPending}
+      >
+        <Trash2 className="w-3 h-3" />
+        Cancel
+      </Button>
+    </div>
   );
 }
