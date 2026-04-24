@@ -1,11 +1,12 @@
-import { useState } from "react";
 import { AgentCard } from "./AgentCard";
 import { AgentDetail } from "./AgentDetail";
 import { useAgents } from "@/api/queries/agents";
+import { useUIStore } from "@/stores/ui-store";
 
 export function AgentPanel() {
   const { data: agents, isLoading } = useAgents();
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const selectedAgent = useUIStore((s) => s.selectedAgent);
+  const setSelectedAgent = useUIStore((s) => s.setSelectedAgent);
 
   const workingAgents = agents?.filter((a) => a.status === "working") ?? [];
   const busyAgents = agents?.filter((a) => a.status === "busy") ?? [];

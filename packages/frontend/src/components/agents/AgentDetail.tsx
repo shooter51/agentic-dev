@@ -10,6 +10,7 @@ import { useAgent } from "@/api/queries/agents";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui-store";
 import { ChevronDown, ChevronRight, Radio } from "lucide-react";
 
 interface AgentDetailProps {
@@ -211,7 +212,15 @@ export function AgentDetail({ agentId, onClose }: AgentDetailProps) {
                 {agent?.currentTaskId && (
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Task</label>
-                    <p className="text-sm text-blue-600 mt-1">{agent.currentTaskId}</p>
+                    <button
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1 block text-left"
+                      onClick={() => {
+                        onClose();
+                        setTimeout(() => useUIStore.getState().setSelectedTask(agent.currentTaskId!), 100);
+                      }}
+                    >
+                      {agent.currentTaskId}
+                    </button>
                   </div>
                 )}
                 {agent?.lastError && (

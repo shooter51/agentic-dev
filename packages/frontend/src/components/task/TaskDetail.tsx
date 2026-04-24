@@ -13,12 +13,14 @@ import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
 import { TaskEditor } from "./TaskEditor";
 import { useTask } from "@/api/queries/tasks";
+import { useAgentModel } from "@/api/queries/agents";
 import { useUIStore } from "@/stores/ui-store";
 
 export function TaskDetail() {
   const selectedTask = useUIStore((s) => s.selectedTask);
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
   const { data: task, isLoading } = useTask(selectedTask ?? "");
+  const agentModel = useAgentModel(task?.assignedAgent);
 
   const isOpen = !!selectedTask;
 
@@ -70,12 +72,18 @@ export function TaskDetail() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Assigned Agent
                       </label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <AgentAvatar agentId={task.assignedAgent} size="md" />
-                        <span className="text-sm text-gray-800">
+                      <button
+                        className="flex items-center gap-2 mt-1 hover:bg-gray-50 rounded p-1 -ml-1 transition-colors"
+                        onClick={() => {
+                          setSelectedTask(null);
+                          setTimeout(() => useUIStore.getState().setSelectedAgent(task.assignedAgent!), 100);
+                        }}
+                      >
+                        <AgentAvatar agentId={task.assignedAgent} model={agentModel} size="md" />
+                        <span className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
                           {task.assignedAgent}
                         </span>
-                      </div>
+                      </button>
                     </div>
                   )}
 

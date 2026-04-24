@@ -14,6 +14,7 @@ interface ActiveFilters {
 interface UIState {
   selectedProject: string | null;
   selectedTask: string | null;
+  selectedAgent: string | null;
   sidebarOpen: boolean;
   compactMode: boolean;
   isDragging: boolean;
@@ -25,6 +26,7 @@ interface UIState {
   // Actions
   setSelectedProject: (id: string | null) => void;
   setSelectedTask: (id: string | null) => void;
+  setSelectedAgent: (id: string | null) => void;
   toggleSidebar: () => void;
   toggleCompactMode: () => void;
   setDragging: (v: boolean, taskId?: string | null) => void;
@@ -38,6 +40,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set, get) => ({
   selectedProject: null,
   selectedTask: null,
+  selectedAgent: null,
   sidebarOpen: true,
   compactMode: false,
   isDragging: false,
@@ -48,6 +51,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setSelectedProject: (id) => set({ selectedProject: id }),
   setSelectedTask: (id) => set({ selectedTask: id }),
+  setSelectedAgent: (id) => set({ selectedAgent: id }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleCompactMode: () => set((s) => ({ compactMode: !s.compactMode })),
   setDragging: (v, taskId = null) =>
