@@ -185,7 +185,7 @@ function TaskActions({ taskId, stage }: { taskId: string; stage: string }) {
   const queryClient = useQueryClient();
 
   const retry = useMutation({
-    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/retry`),
+    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/retry`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["board"] });
       queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
