@@ -51,6 +51,54 @@ export default async function projectRoutes(fastify: FastifyInstance): Promise<v
     reply.code(201).send(project);
   });
 
+  // Import an existing project directory
+  fastify.post('/api/projects/import', async (request, reply) => {
+    const body = request.body as { path: string; name?: string };
+    const dirPath = body.path?.trim();
+
+    if (!dirPath) {
+      return reply.code(400).send({ error: 'path is required' });
+    }
+
+    if (BLOCKED_PATH_PATTERNS.some((p) => p.test(dirPath))) {
+      return reply.code(400).send({ error: 'Test paths are not allowed.' });
+    }
+
+    // Check path exists
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    try {
+      const stat = await fs.stat(dirPath);
+      if (!stat.isDirectory()) {
+        return reply.code(400).send({ error: 'Path is not a directory' });
+      }
+    } catch {
+      return reply.code(400).send({ error: 'Path does not exist' });
+    }
+
+    // Check for duplicate
+    const existing = await repo.findByPath?.(dirPath);
+    if (existing) {
+      return reply.code(409).send({ error: 'A project with this path already exists' });
+    }
+
+    // Auto-detect name from package.json or directory basename
+    let name = body.name?.trim() || '';
+    if (!name) {
+      try {
+        const pkgPath = path.join(dirPath, 'package.json');
+        const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
+        name = pkg.name || '';
+      } catch { /* no package.json */ }
+      if (!name) {
+        name = path.basename(dirPath);
+      }
+    }
+
+    const project = await repo.create({ name, path: dirPath, config: null });
+    reply.code(201).send(project);
+  });
+
   fastify.get('/api/projects/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const project = await repo.findById(id);
