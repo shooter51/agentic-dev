@@ -648,6 +648,25 @@ export class Orchestrator {
       timestamp: new Date().toISOString(),
     });
 
+    // Log error to task_history so it's visible in the UI
+    try {
+      const { taskHistory } = await import('../db/schema/task-history.js');
+      await this.db.insert(taskHistory).values({
+        id: ulid(),
+        taskId,
+        event: 'agent_error',
+        fromValue: null,
+        toValue: null,
+        agentId,
+        details: JSON.stringify({
+          error: errorMessage.slice(0, 500),
+          attempt: retryState.count,
+          isTransient,
+        }),
+        createdAt: new Date().toISOString(),
+      });
+    } catch { /* best effort */ }
+
     // Clear task assignment
     try {
       this.db.run(
