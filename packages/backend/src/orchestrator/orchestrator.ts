@@ -402,6 +402,10 @@ export class Orchestrator {
       // Skip tasks already being dispatched (prevents race between cycles)
       if (this.dispatchingTasks.has(task.id)) continue;
 
+      // Skip tasks that have exceeded max retries (awaiting self-repair or manual intervention)
+      const retries = this.taskRetries.get(task.id);
+      if (retries && retries.count >= Orchestrator.MAX_TASK_RETRIES) continue;
+
       const agent = this.findAvailableAgent(task.stage);
       if (!agent) continue; // All agents in this lane are busy
 
@@ -727,6 +731,11 @@ export class Orchestrator {
         console.error(`[SelfHeal] Repair failed for task ${taskId}:`, repairErr);
       });
 
+      // Keep the retry counter so we don't re-enter self-repair on next dispatch.
+      // The task assignment is already cleared above. If self-repair succeeds,
+      // it will delete the counter and the task will be re-dispatched.
+      // If self-repair fails/skips, the watchdog will NOT clear this task
+      // because the counter stays >= MAX_TASK_RETRIES.
       this.setAgentStatus(agentId, 'idle').catch(() => {});
       return;
     }
