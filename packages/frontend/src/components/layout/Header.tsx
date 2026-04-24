@@ -24,12 +24,7 @@ export function Header() {
   const { data: pending } = usePendingMessages();
   const { data: projects } = useProjects();
 
-  // Auto-select first project if none selected
-  useEffect(() => {
-    if (!selectedProject && projects && projects.length > 0) {
-      setSelectedProject(projects[0].id);
-    }
-  }, [selectedProject, projects, setSelectedProject]);
+  // No auto-select — default to "All Projects" (selectedProject = null)
 
   const errorCount = agents?.filter((a) => a.status === "error").length ?? 0;
   const pendingCount = pending?.length ?? 0;

@@ -147,7 +147,7 @@ async function spawnClaudeRepair(
   prompt: string,
   projectPath: string,
 ): Promise<ClaudeRepairResult> {
-  const claudeBin = process.env['CLAUDE_BIN'] ?? '/Users/tomgibson/.local/bin/claude';
+  const claudeBin = process.env['CLAUDE_BIN'] ?? 'claude';
 
   return new Promise<ClaudeRepairResult>((resolve, reject) => {
     const child = spawn(

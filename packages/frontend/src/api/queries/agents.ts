@@ -6,7 +6,14 @@ import type { AgentModel } from "@/theme/agent-colors";
 export function useAgents() {
   return useQuery({
     queryKey: ["agents"],
-    queryFn: () => apiClient.get<Agent[]>("/api/agents"),
+    queryFn: async () => {
+      const agents = await apiClient.get<Agent[]>("/api/agents");
+      // Map API field name (currentTask) to frontend field name (currentTaskId)
+      return agents.map((a) => ({
+        ...a,
+        currentTaskId: a.currentTaskId ?? a.currentTask ?? undefined,
+      }));
+    },
     refetchInterval: 3_000,
   });
 }

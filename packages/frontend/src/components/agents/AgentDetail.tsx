@@ -148,7 +148,7 @@ export function AgentDetail({ agentId, onClose }: AgentDetailProps) {
       <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col p-0">
         <SheetHeader className="px-6 py-4 border-b">
           <div className="flex items-center gap-3">
-            {agentId && <AgentAvatar agentId={agentId} role={agent?.role} size="lg" />}
+            {agentId && <AgentAvatar agentId={agentId} role={agent?.role} model={agent?.model as "opus" | "sonnet" | null} size="lg" />}
             <div className="flex-1">
               <SheetTitle className="text-left">{agent?.name || agentId}</SheetTitle>
               <p className="text-xs text-gray-500">{agent?.role}</p>

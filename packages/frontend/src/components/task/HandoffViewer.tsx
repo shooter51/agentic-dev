@@ -1,9 +1,19 @@
 import { useState } from "react";
 import { useTaskHandoffs } from "@/api/queries/handoffs";
+import { useAgentModel } from "@/api/queries/agents";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { ChevronDown, ChevronRight } from "lucide-react";
+
+interface HandoffAgentAvatarProps {
+  agentId: string;
+}
+
+function HandoffAgentAvatar({ agentId }: HandoffAgentAvatarProps) {
+  const agentModel = useAgentModel(agentId);
+  return <AgentAvatar agentId={agentId} model={agentModel} size="sm" />;
+}
 
 interface HandoffViewerProps {
   taskId: string;
@@ -34,7 +44,7 @@ export function HandoffViewer({ taskId }: HandoffViewerProps) {
               className="w-full flex items-center gap-2 p-3 hover:bg-gray-50 text-left"
               onClick={() => setExpandedId(isExpanded ? null : handoff.id)}
             >
-              <AgentAvatar agentId={handoff.fromAgent} size="sm" />
+              <HandoffAgentAvatar agentId={handoff.fromAgent} />
               <StageBadge stage={handoff.fromStage} />
               <span className="text-gray-400">&rarr;</span>
               <StageBadge stage={handoff.toStage} />

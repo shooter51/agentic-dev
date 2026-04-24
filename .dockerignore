@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.db
+data/
+.env
+.env.*
+!.env.example
+coverage/
+.vitest/
+playwright-report/
+test-results/
+.vite/
+.git/
+*.log
+TestResults.xcresult

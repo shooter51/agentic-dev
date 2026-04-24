@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 import { MarkdownContent } from "@/components/common/MarkdownContent";
+import { useAgentModel } from "@/api/queries/agents";
 import type { Message } from "@/api/types";
 
 interface MessageBubbleProps {
@@ -17,12 +18,13 @@ const TYPE_STYLES: Record<string, string> = {
 
 export function MessageBubble({ message, className }: MessageBubbleProps) {
   const typeStyle = TYPE_STYLES[message.type] ?? TYPE_STYLES.notification;
+  const agentModel = useAgentModel(message.fromAgent);
 
   return (
     <div className={cn("rounded border p-3", typeStyle, className)}>
       <div className="flex items-center gap-2 mb-1">
         {message.fromAgent && (
-          <AgentAvatar agentId={message.fromAgent} size="sm" />
+          <AgentAvatar agentId={message.fromAgent} model={agentModel} size="sm" />
         )}
         <span className="text-xs font-medium text-gray-600">
           {message.fromAgent ?? "Operator"}

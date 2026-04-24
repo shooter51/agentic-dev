@@ -104,6 +104,28 @@ async function start() {
   // -- Routes -----------------------------------------------------------------
   await registerRoutes(server);
 
+  // -- Static frontend serving (production) -----------------------------------
+  if (process.env['NODE_ENV'] === 'production') {
+    const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+    const { existsSync } = await import('fs');
+    if (existsSync(frontendDist)) {
+      const fastifyStatic = await import('@fastify/static');
+      await server.register(fastifyStatic.default, {
+        root: frontendDist,
+        prefix: '/',
+        wildcard: false,
+      });
+      // SPA fallback: serve index.html for non-API routes
+      server.setNotFoundHandler((_req, reply) => {
+        if (_req.url.startsWith('/api/')) {
+          return reply.code(404).send({ error: 'Not found' });
+        }
+        return reply.sendFile('index.html');
+      });
+      server.log.info(`Serving frontend from ${frontendDist}`);
+    }
+  }
+
   // -- Start ------------------------------------------------------------------
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' });

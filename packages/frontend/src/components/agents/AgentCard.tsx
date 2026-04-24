@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 import { MemoryViewer } from "./MemoryViewer";
 import { usePauseAgent, useResumeAgent } from "@/api/queries/agents";
+import { useTask } from "@/api/queries/tasks";
 import { useUIStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -30,6 +31,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
   const resume = useResumeAgent();
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
   const [expanded, setExpanded] = useState(false);
+  const { data: currentTask } = useTask(agent.currentTaskId ?? "");
 
   const statusConfig = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
 
@@ -77,10 +79,11 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
           <p className="text-xs text-gray-500 mt-0.5">{agent.role}</p>
           {agent.currentTaskId && (
             <button
-              className="text-xs text-blue-600 hover:text-blue-800 hover:underline mt-1 truncate block text-left"
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline mt-1 truncate block text-left max-w-full"
               onClick={() => setSelectedTask(agent.currentTaskId!)}
+              title={currentTask?.title ?? agent.currentTaskId}
             >
-              Working on: {agent.currentTaskId}
+              Working on: {currentTask?.title ?? agent.currentTaskId.slice(-8)}
             </button>
           )}
           {agent.status === "error" && agent.lastError && (

@@ -1,17 +1,19 @@
 /**
- * cli-runner.ts — runs agents via the Claude CLI subprocess.
+ * cli-runner.ts — runs agents via CLI subprocesses (Claude Code or OpenCode).
  *
- * Replaces agent-runner.ts as the active runner. Uses the `claude` binary
- * with --print and --output-format stream-json to stream tool calls and
- * capture the final result.
+ * Supports two backends controlled by AGENT_RUNNER env var:
+ *   - "claude"   (default) — uses `claude` CLI with --output-format stream-json
+ *   - "opencode" — uses `opencode run` with --format json
  *
  * Exports:
  *   AgentResult               — summary, handoffContent, completedViaSignal
- *   runAgentLoop()            — core loop using claude CLI
+ *   RunnerDeps                — shared dependencies
+ *   runAgentLoop()            — core loop using selected CLI
  *   runAgentWithErrorHandling() — wrapper with error recovery
  */
 
 import { spawn } from 'child_process';
+import { realpathSync, existsSync } from 'fs';
 import type { AgentIdentity } from '@agentic-dev/shared';
 import type { Task } from '../db/schema/tasks';
 import { buildSystemPrompt, buildTaskPrompt, type AgentContext } from './context-builder';
@@ -48,11 +50,31 @@ export interface RunnerDeps {
 }
 
 // ---------------------------------------------------------------------------
+// Runner backend selection
+// ---------------------------------------------------------------------------
+
+type RunnerBackend = 'claude' | 'opencode';
+
+function getRunnerBackend(): RunnerBackend {
+  const val = (process.env['AGENT_RUNNER'] ?? 'claude').toLowerCase();
+  if (val === 'opencode') return 'opencode';
+  return 'claude';
+}
+
+// ---------------------------------------------------------------------------
 // Model mapping
 // ---------------------------------------------------------------------------
 
-function resolveModel(model: AgentIdentity['model']): string {
+function resolveClaudeModel(model: AgentIdentity['model']): string {
   return model === 'opus' ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
+}
+
+function resolveOpenCodeModel(model: AgentIdentity['model']): string {
+  // OpenCode uses provider/model format. Check env for overrides.
+  if (model === 'opus') {
+    return process.env['OPENCODE_OPUS_MODEL'] ?? 'anthropic/claude-opus-4-20250514';
+  }
+  return process.env['OPENCODE_SONNET_MODEL'] ?? 'anthropic/claude-sonnet-4-20250514';
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +99,6 @@ function mapAllowedTools(allowedTools: string[]): string[] {
     if (builtin) {
       mapped.add(builtin);
     } else {
-      // Pass through unknown tools as-is
       mapped.add(tool);
     }
   }
@@ -85,20 +106,34 @@ function mapAllowedTools(allowedTools: string[]): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Claude CLI path
+// Binary paths
 // ---------------------------------------------------------------------------
 
 function getClaudeBinaryPath(): string {
-  return process.env['CLAUDE_BIN'] ?? '/Users/tomgibson/.local/bin/claude';
+  const bin = process.env['CLAUDE_BIN'] ?? 'claude';
+  try {
+    return realpathSync(bin);
+  } catch {
+    return bin;
+  }
+}
+
+function getOpenCodeBinaryPath(): string {
+  const bin = process.env['OPENCODE_BIN'] ?? 'opencode';
+  try {
+    return realpathSync(bin);
+  } catch {
+    return bin;
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Stream JSON event types from claude --output-format stream-json
+// Stream JSON event types (Claude)
 // ---------------------------------------------------------------------------
 
 interface StreamAssistantText {
   type: 'assistant';
-  message: { content: Array<{ type: string; text?: string }> };
+  message: { content: Array<{ type: string; text?: string; name?: string }> };
 }
 
 interface StreamResult {
@@ -118,59 +153,47 @@ interface StreamToolUse {
 type StreamEvent = StreamAssistantText | StreamResult | StreamToolUse | { type: string };
 
 // ---------------------------------------------------------------------------
-// runAgentLoop
+// OpenCode JSON event types
 // ---------------------------------------------------------------------------
 
-/**
- * Core agent run loop. Spawns the claude CLI with --print and streams
- * output to capture tool calls (for SSE) and the final result.
- *
- * The MCP server is provided in-process via stdio so the agent can:
- *   - signal_complete
- *   - send_message
- *   - create_memory / read_memories
- *   - update_task_metadata
- *   - beads_create / beads_list
- */
-export async function runAgentLoop(
+interface OpenCodeEvent {
+  type: string;
+  timestamp?: number;
+  sessionID?: string;
+  // text events
+  text?: { content: string; role?: string };
+  // tool events
+  tool?: { name: string; args?: Record<string, unknown>; result?: string };
+  // error events
+  error?: { name: string; data?: { message: string } };
+  // completion events
+  result?: { content: string; cost_usd?: number };
+}
+
+// ---------------------------------------------------------------------------
+// Resolve working directory
+// ---------------------------------------------------------------------------
+
+function resolveWorkDir(context: AgentContext): string {
+  const candidatePath = context.repoPath ?? process.cwd();
+  // Fall back to /tmp if project path doesn't exist — NEVER use process.cwd()
+  // because that's the main agentic-dev repo and agents editing there crash the frontend
+  return existsSync(candidatePath) ? candidatePath : '/tmp';
+}
+
+// ---------------------------------------------------------------------------
+// Build CLI args
+// ---------------------------------------------------------------------------
+
+function buildClaudeArgs(
   agent: AgentIdentity,
-  task: Task,
-  context: AgentContext,
-  deps: RunnerDeps,
-): Promise<AgentResult> {
-  // Completion state shared between MCP server and runner
-  const completionState = {
-    completed: false,
-    summary: '',
-    handoffContent: null as string | null,
-  };
-
-  // Build prompts
-  const systemPrompt = buildSystemPrompt(agent, context);
-  const taskPrompt = buildTaskPrompt(task, context.handoff, context.claudeMd);
-
-  // Get repoPath from context (may be undefined)
-  const repoPath = context.repoPath ?? process.cwd();
-
-  // Create in-process MCP server
-  const mcpServer = createOrchestratorMcpServer({
-    messageBus: deps.messageBus,
-    memoryManager: deps.memoryManager,
-    db: deps.db,
-    agentId: agent.id,
-    taskId: task.id,
-    projectId: task.projectId,
-    completionState,
-  });
-
-  // Map allowed tools
+  systemPrompt: string,
+  taskPrompt: string,
+  mcpServer: { scriptPath: string } | null,
+): string[] {
+  const modelId = resolveClaudeModel(agent.model);
   const builtinTools = mapAllowedTools(agent.allowedTools ?? []);
 
-  // Resolve model
-  const modelId = resolveModel(agent.model);
-
-  // Build claude CLI args
-  const claudeBin = getClaudeBinaryPath();
   const args: string[] = [
     '--verbose',
     '--output-format', 'stream-json',
@@ -180,12 +203,10 @@ export async function runAgentLoop(
     '--system-prompt', systemPrompt,
   ];
 
-  // Add allowed tools
   if (builtinTools.length > 0) {
     args.push('--allowedTools', builtinTools.join(','));
   }
 
-  // Add MCP server via stdio transport
   if (mcpServer) {
     args.push('--mcp-config', JSON.stringify({
       mcpServers: {
@@ -198,19 +219,227 @@ export async function runAgentLoop(
     }));
   }
 
-  // The task prompt is passed via -p flag (required for --print mode)
   args.push('-p', taskPrompt);
+  return args;
+}
+
+function buildOpenCodeArgs(
+  agent: AgentIdentity,
+  systemPrompt: string,
+  taskPrompt: string,
+): string[] {
+  const modelId = resolveOpenCodeModel(agent.model);
+
+  // OpenCode uses `run` subcommand with the prompt as positional args.
+  // System prompt is prepended to the task prompt since opencode doesn't have
+  // a separate --system-prompt flag.
+  const fullPrompt = `${systemPrompt}\n\n---\n\n${taskPrompt}`;
+
+  return [
+    'run',
+    '--format', 'json',
+    '-m', modelId,
+    fullPrompt,
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Event parsers
+// ---------------------------------------------------------------------------
+
+function parseClaudeEvent(
+  line: string,
+  agent: AgentIdentity,
+  task: Task,
+  deps: RunnerDeps,
+  state: { finalSummary: string; totalCostUsd: number; completionState: CompletionState },
+): void {
+  let event: StreamEvent;
+  try {
+    event = JSON.parse(line) as StreamEvent;
+  } catch {
+    return;
+  }
+
+  if (event.type === 'assistant') {
+    const assistantEvent = event as StreamAssistantText;
+    for (const block of assistantEvent.message?.content ?? []) {
+      if (block.type === 'text' && block.text) {
+        state.finalSummary = block.text;
+      }
+      if (block.type === 'tool_use') {
+        deps.sseBroadcaster.emit('agent-tool-use', {
+          agentId: agent.id,
+          taskId: task.id,
+          tool: block.name ?? 'unknown',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  if (event.type === 'result') {
+    const resultEvent = event as StreamResult;
+    if (resultEvent.cost_usd) {
+      state.totalCostUsd = resultEvent.cost_usd;
+    }
+    if (resultEvent.result) {
+      state.finalSummary = resultEvent.result;
+      console.log(`[cli-runner] Agent ${agent.id} result: ${resultEvent.result.slice(0, 200)}`);
+    }
+    if (resultEvent.is_error) {
+      console.warn(`[cli-runner] Agent ${agent.id} result was an error: ${resultEvent.result}`);
+    }
+    if (!resultEvent.is_error && resultEvent.result) {
+      state.completionState.completed = true;
+      state.completionState.summary = resultEvent.result;
+      if (state.finalSummary && state.finalSummary.length > 50) {
+        state.completionState.handoffContent = state.finalSummary;
+      }
+      console.log(`[cli-runner] Agent ${agent.id} auto-completed (result event received)`);
+    }
+  }
+}
+
+function parseOpenCodeEvent(
+  line: string,
+  agent: AgentIdentity,
+  task: Task,
+  deps: RunnerDeps,
+  state: { finalSummary: string; totalCostUsd: number; completionState: CompletionState },
+): void {
+  let event: OpenCodeEvent;
+  try {
+    event = JSON.parse(line) as OpenCodeEvent;
+  } catch {
+    return;
+  }
+
+  // Text content from assistant
+  if (event.type === 'text' && event.text?.content) {
+    state.finalSummary = event.text.content;
+  }
+
+  // Tool calls
+  if (event.type === 'tool_call' && event.tool?.name) {
+    deps.sseBroadcaster.emit('agent-tool-use', {
+      agentId: agent.id,
+      taskId: task.id,
+      tool: event.tool.name,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Error events
+  if (event.type === 'error') {
+    const msg = event.error?.data?.message ?? event.error?.name ?? 'unknown error';
+    console.warn(`[cli-runner] Agent ${agent.id} opencode error: ${msg.slice(0, 200)}`);
+  }
+
+  // Completion / result
+  if (event.type === 'result' && event.result) {
+    if (event.result.cost_usd) {
+      state.totalCostUsd = event.result.cost_usd;
+    }
+    if (event.result.content) {
+      state.finalSummary = event.result.content;
+      state.completionState.completed = true;
+      state.completionState.summary = event.result.content;
+      if (state.finalSummary.length > 50) {
+        state.completionState.handoffContent = state.finalSummary;
+      }
+      console.log(`[cli-runner] Agent ${agent.id} auto-completed (opencode result)`);
+    }
+  }
+
+  // OpenCode emits "done" when the session finishes
+  if (event.type === 'done') {
+    if (!state.completionState.completed && state.finalSummary) {
+      state.completionState.completed = true;
+      state.completionState.summary = state.finalSummary;
+      if (state.finalSummary.length > 50) {
+        state.completionState.handoffContent = state.finalSummary;
+      }
+      console.log(`[cli-runner] Agent ${agent.id} auto-completed (opencode done event)`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared completion state type
+// ---------------------------------------------------------------------------
+
+interface CompletionState {
+  completed: boolean;
+  summary: string;
+  handoffContent: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// runAgentLoop
+// ---------------------------------------------------------------------------
+
+export async function runAgentLoop(
+  agent: AgentIdentity,
+  task: Task,
+  context: AgentContext,
+  deps: RunnerDeps,
+): Promise<AgentResult> {
+  const completionState: CompletionState = {
+    completed: false,
+    summary: '',
+    handoffContent: null,
+  };
+
+  const systemPrompt = buildSystemPrompt(agent, context);
+  const taskPrompt = buildTaskPrompt(task, context.handoff, context.claudeMd);
+  const repoPath = resolveWorkDir(context);
+  const backend = getRunnerBackend();
+
+  // MCP server (only for Claude — OpenCode has its own MCP config)
+  const mcpServer = backend === 'claude' ? createOrchestratorMcpServer({
+    messageBus: deps.messageBus,
+    memoryManager: deps.memoryManager,
+    db: deps.db,
+    agentId: agent.id,
+    taskId: task.id,
+    projectId: task.projectId,
+    completionState,
+  }) : null;
+
+  // Build args based on backend
+  let bin: string;
+  let args: string[];
+  let modelId: string;
+
+  if (backend === 'opencode') {
+    bin = getOpenCodeBinaryPath();
+    args = buildOpenCodeArgs(agent, systemPrompt, taskPrompt);
+    modelId = resolveOpenCodeModel(agent.model);
+    console.log(`[cli-runner] Using OpenCode backend for ${agent.id} (model: ${modelId})`);
+  } else {
+    bin = getClaudeBinaryPath();
+    args = buildClaudeArgs(agent, systemPrompt, taskPrompt, mcpServer);
+    modelId = resolveClaudeModel(agent.model);
+    console.log(`[cli-runner] Using Claude backend for ${agent.id} (model: ${modelId})`);
+  }
+
+  const parseEvent = backend === 'opencode' ? parseOpenCodeEvent : parseClaudeEvent;
 
   return new Promise<AgentResult>((resolve, reject) => {
-    const child = spawn(claudeBin, args, {
+    const child = spawn(bin, args, {
       cwd: repoPath,
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
+    const state = {
+      finalSummary: '',
+      totalCostUsd: 0,
+      completionState,
+    };
+
     let stderr = '';
-    let finalSummary = '';
-    let totalCostUsd = 0;
 
     child.stderr.on('data', (d: Buffer) => {
       stderr += d.toString();
@@ -221,53 +450,13 @@ export async function runAgentLoop(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-
-        let event: StreamEvent;
-        try {
-          event = JSON.parse(trimmed) as StreamEvent;
-        } catch {
-          // Not JSON — skip
-          continue;
-        }
-
-        // Capture text and tool_use from assistant turns
-        if (event.type === 'assistant') {
-          const assistantEvent = event as StreamAssistantText;
-          for (const block of assistantEvent.message?.content ?? []) {
-            if (block.type === 'text' && block.text) {
-              finalSummary = block.text;
-            }
-            // Tool calls are nested inside assistant message content blocks
-            if (block.type === 'tool_use') {
-              deps.sseBroadcaster.emit('agent-tool-use', {
-                agentId: agent.id,
-                taskId: task.id,
-                tool: (block as any).name ?? 'unknown',
-                timestamp: new Date().toISOString(),
-              });
-            }
-          }
-        }
-
-        // Capture cost from result event
-        if (event.type === 'result') {
-          const resultEvent = event as StreamResult;
-          if (resultEvent.cost_usd) {
-            totalCostUsd = resultEvent.cost_usd;
-          }
-          if (resultEvent.result) {
-            finalSummary = resultEvent.result;
-          }
-          if (resultEvent.is_error) {
-            console.warn(`[cli-runner] Agent ${agent.id} result was an error: ${resultEvent.result}`);
-          }
-        }
+        parseEvent(trimmed, agent, task, deps, state);
       }
     });
 
     child.on('close', (code) => {
       // Track cost if we got one
-      if (totalCostUsd > 0) {
+      if (state.totalCostUsd > 0) {
         deps.costTracker.trackCall({
           agentId: agent.id,
           taskId: task.id,
@@ -284,19 +473,18 @@ export async function runAgentLoop(
       }
 
       if (code !== 0 && !completionState.completed) {
-        console.warn(`[cli-runner] Agent ${agent.id} claude CLI exited with code ${code}. stderr: ${stderr.slice(0, 500)}`);
-        // Don't throw — treat as completed with whatever we have
+        console.warn(`[cli-runner] Agent ${agent.id} ${backend} CLI exited with code ${code}. stderr: ${stderr.slice(0, 500)}`);
       }
 
       resolve({
-        summary: completionState.summary || finalSummary,
+        summary: completionState.summary || state.finalSummary,
         handoffContent: completionState.handoffContent,
         completedViaSignal: completionState.completed,
       });
     });
 
     child.on('error', (err: Error) => {
-      reject(new Error(`Failed to spawn claude CLI: ${err.message}`));
+      reject(new Error(`Failed to spawn ${backend} CLI: ${err.message}`));
     });
   });
 }
@@ -309,9 +497,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Wraps runAgentLoop with basic error handling and retry for transient failures.
- */
 export async function runAgentWithErrorHandling(
   agent: AgentIdentity,
   task: Task,
@@ -333,9 +518,10 @@ export async function runAgentWithErrorHandling(
         });
         throw error;
       }
-
-      console.warn(`[cli-runner] Agent ${agent.id} attempt ${retries} failed, retrying:`, error);
-      await sleep(2000 * retries);
+      const backoff = 2000 * retries;
+      const backend = getRunnerBackend();
+      console.log(`[cli-runner] Agent ${agent.id} attempt ${retries} failed, retrying in ${backoff}ms: ${error instanceof Error ? error.message : error}`);
+      await sleep(backoff);
     }
   }
 }

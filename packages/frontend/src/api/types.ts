@@ -33,7 +33,8 @@ export interface Agent {
   name: string;
   role: string;
   status: AgentStatus;
-  currentTaskId?: string;
+  currentTaskId?: string;  // mapped from API's currentTask field
+  currentTask?: string;    // raw API field name
   lastHeartbeat?: string;
   model?: string;
   specialization?: string;

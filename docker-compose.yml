@@ -1,0 +1,19 @@
+services:
+  agentic-dev:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - agentic-data:/app/packages/backend/data
+    environment:
+      - PORT=3001
+      - DB_PATH=data/agentic-dev.db
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AGENT_RUNNER=${AGENT_RUNNER:-claude}
+      - OPENCODE_OPUS_MODEL=${OPENCODE_OPUS_MODEL:-}
+      - OPENCODE_SONNET_MODEL=${OPENCODE_SONNET_MODEL:-}
+      - NODE_ENV=production
+    restart: unless-stopped
+
+volumes:
+  agentic-data:

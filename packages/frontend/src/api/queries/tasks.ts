@@ -45,3 +45,15 @@ export function useMoveTask() {
     },
   });
 }
+
+export function useCancelTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiClient.post(`/api/tasks/${taskId}/cancel`, { reason: "Cancelled by user" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+    },
+  });
+}
