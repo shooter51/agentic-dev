@@ -208,10 +208,10 @@ export function AgentDetail({ agentId, onClose }: AgentDetailProps) {
                     <p className="text-sm text-gray-800 mt-1 capitalize">{agent?.status}</p>
                   </div>
                 </div>
-                {agent?.currentTask && (
+                {agent?.currentTaskId && (
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Task</label>
-                    <p className="text-sm text-blue-600 mt-1">{agent.currentTask}</p>
+                    <p className="text-sm text-blue-600 mt-1">{agent.currentTaskId}</p>
                   </div>
                 )}
                 {agent?.lastError && (
