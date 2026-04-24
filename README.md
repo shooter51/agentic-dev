@@ -2,6 +2,8 @@
 
 A multi-agent software development system that orchestrates 10 AI agents through a 12-stage SDLC pipeline. Create a task, and a team of specialized agents — product manager, architect, developers, tech lead, DevOps, QA, and documentation — collaboratively build it from spec to deployment.
 
+![Kanban Board](docs/screenshots/board.png)
+
 ## How It Works
 
 You create a task (feature, bug fix, or spec) and assign it to a project. The orchestrator dispatches it through the pipeline:
@@ -28,6 +30,16 @@ Each stage is handled by a specialized agent. Agents hand off work to each other
 | Manual QA | Sonnet | manual_qa | Manual testing |
 | Automation | Sonnet | automation | Test automation |
 | Documentation | Sonnet | documentation | Docs, guides |
+
+## Screenshots
+
+| Task Detail | Agent Detail |
+|:-----------:|:------------:|
+| ![Task Detail](docs/screenshots/task-detail.png) | ![Agent Detail](docs/screenshots/agent-detail.png) |
+
+| Stats Dashboard | Create Task |
+|:---------------:|:-----------:|
+| ![Stats](docs/screenshots/stats.png) | ![New Task](docs/screenshots/new-task.png) |
 
 ## Features
 

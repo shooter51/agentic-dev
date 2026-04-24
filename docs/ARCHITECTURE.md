@@ -151,6 +151,10 @@ Server-Sent Events broadcast to the dashboard:
 
 ### Frontend (`packages/frontend/src/`)
 
+![Board View](screenshots/board.png)
+
+![Stats Dashboard](screenshots/stats.png)
+
 ```
 src/
   api/            # API client, TanStack Query hooks, types
