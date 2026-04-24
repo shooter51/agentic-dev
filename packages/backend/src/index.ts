@@ -61,6 +61,13 @@ async function start() {
     // Column already exists — ignore
   }
 
+  // -- ALTER TABLE: add pipeline_mode column if not exists --------------------
+  try {
+    await db.run(sql`ALTER TABLE tasks ADD COLUMN pipeline_mode TEXT NOT NULL DEFAULT 'standard'`);
+  } catch {
+    // Column already exists — ignore
+  }
+
   // -- DB seed ----------------------------------------------------------------
   await seedAgents(db);
 

@@ -8,6 +8,7 @@ export interface Task {
   stage: string;
   priority: Priority;
   type: TaskType;
+  pipelineMode?: PipelineMode;
   assignedAgent?: string;
   projectId: string;
   beadsId?: string;
@@ -25,6 +26,8 @@ export interface TaskHistoryEvent {
   details?: string;    // JSON string with event-specific data
   createdAt: string;
 }
+
+export type PipelineMode = "standard" | "qa_automation";
 
 export type AgentStatus = "idle" | "busy" | "error" | "paused" | "working";
 

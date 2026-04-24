@@ -12,13 +12,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useUIStore } from "@/stores/ui-store";
 import { Plus } from "lucide-react";
-import type { Task, Priority, TaskType } from "@/api/types";
+import type { Task, Priority, TaskType, PipelineMode } from "@/api/types";
 
 interface CreateTaskPayload {
   title: string;
   description?: string;
   priority: Priority;
   type: TaskType;
+  pipelineMode: PipelineMode;
 }
 
 export function CreateTaskDialog() {
@@ -27,6 +28,7 @@ export function CreateTaskDialog() {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("P2");
   const [type, setType] = useState<TaskType>("task" as TaskType);
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("standard");
 
   const selectedProject = useUIStore((s) => s.selectedProject);
   const queryClient = useQueryClient();
@@ -49,13 +51,14 @@ export function CreateTaskDialog() {
       setDescription("");
       setPriority("P2");
       setType("task" as TaskType);
+      setPipelineMode("standard");
     },
   });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !effectiveProject) return;
-    createTask.mutate({ title: title.trim(), description: description.trim() || undefined, priority, type });
+    createTask.mutate({ title: title.trim(), description: description.trim() || undefined, priority, type, pipelineMode });
   }
 
   return (
@@ -128,6 +131,23 @@ export function CreateTaskDialog() {
                 <option value="chore">Chore</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-1">Pipeline Mode</label>
+            <select
+              value={pipelineMode}
+              onChange={(e) => setPipelineMode(e.target.value as PipelineMode)}
+              className="w-full text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="standard">Standard — Full 12-stage pipeline</option>
+              <option value="qa_automation">QA Automation — Manual QA + Automation only</option>
+            </select>
+            {pipelineMode === "qa_automation" && (
+              <p className="text-xs text-gray-500 mt-1">
+                Task starts at Manual QA, then Automation, then Done. Skips product, architecture, development, and deployment stages.
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

@@ -92,7 +92,7 @@ export class TaskPipeline {
       return { success: false, error: `Project not found: ${task.projectId}` };
     }
 
-    const transition = this.findForwardTransition(task.stage, task.type);
+    const transition = this.findForwardTransition(task.stage, task.type, (task as any).pipelineMode);
     if (!transition) {
       return { success: false, error: `No forward transition from stage "${task.stage}"` };
     }
@@ -284,9 +284,22 @@ export class TaskPipeline {
   private findForwardTransition(
     currentStage: Task['stage'],
     taskType: Task['type'],
+    pipelineMode?: string,
   ): PipelineTransition | undefined {
     const candidates = this.transitions.filter((t) => t.from === currentStage);
     if (candidates.length === 0) return undefined;
+
+    // QA Automation mode: manual_qa -> automation -> done
+    if (pipelineMode === 'qa_automation') {
+      if (currentStage === 'manual_qa') {
+        return candidates.find((t) => t.to === 'automation');
+      }
+      if (currentStage === 'automation') {
+        // Go straight to done, skip documentation/deploy/arch_review
+        return candidates.find((t) => t.to === 'done')
+          ?? { from: 'automation', to: 'done' as Task['stage'] };
+      }
+    }
 
     if (currentStage === 'automation') {
       // Bug tasks take the shortcut; everything else goes to documentation

@@ -95,6 +95,11 @@ export function buildTransitionTable(db: DB): PipelineTransition[] {
       to: 'documentation',
       guard: createAutomationGuard(db),
     },
+    // QA Automation mode shortcut: automation -> done
+    {
+      from: 'automation',
+      to: 'done',
+    },
     {
       from: 'documentation',
       to: 'devops_deploy',

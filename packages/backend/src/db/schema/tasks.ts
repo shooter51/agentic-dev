@@ -34,6 +34,9 @@ export const tasks = sqliteTable(
     assignedAgent: text('assigned_agent').references(() => agents.id),
     parentTaskId: text('parent_task_id').references((): ReturnType<typeof text> => tasks.id as any),
     beadsId: text('beads_id'),
+    pipelineMode: text('pipeline_mode', {
+      enum: ['standard', 'qa_automation'],
+    }).notNull().default('standard'),
     branchName: text('branch_name'),
     prUrl: text('pr_url'),
     metadata: text('metadata'), // JSON

@@ -10,6 +10,7 @@ interface CreateTaskBody {
   description?: string;
   priority?: 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
   type?: 'feature' | 'bug' | 'task' | 'chore';
+  pipelineMode?: 'standard' | 'qa_automation';
 }
 
 interface UpdateTaskBody {
@@ -46,13 +47,18 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
     const { projectId } = request.params as { projectId: string };
     const body = request.body as CreateTaskBody;
 
+    const pipelineMode = body.pipelineMode ?? 'standard';
+    // QA Automation mode starts directly in manual_qa, skipping the build stages
+    const initialStage = pipelineMode === 'qa_automation' ? 'manual_qa' : 'todo';
+
     const task = await repo.create({
       projectId,
       title: body.title,
       description: body.description ?? null,
-      stage: 'todo',
+      stage: initialStage,
       priority: body.priority ?? 'P2',
       type: body.type ?? 'feature',
+      pipelineMode,
       assignedAgent: null,
       parentTaskId: null,
       beadsId: null,

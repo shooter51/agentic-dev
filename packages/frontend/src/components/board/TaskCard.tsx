@@ -61,11 +61,18 @@ export function TaskCard({ task, compact, isDragging }: TaskCardProps) {
     >
       <div className="flex items-center justify-between mb-1">
         <PriorityBadge priority={task.priority} />
-        {task.type === "bug" && (
-          <Badge variant="destructive" className="text-xs">
-            Bug
-          </Badge>
-        )}
+        <div className="flex items-center gap-1">
+          {task.pipelineMode === "qa_automation" && (
+            <Badge className="text-xs bg-violet-100 text-violet-700">
+              QA
+            </Badge>
+          )}
+          {task.type === "bug" && (
+            <Badge variant="destructive" className="text-xs">
+              Bug
+            </Badge>
+          )}
+        </div>
       </div>
       <h4 className="text-sm font-medium mb-2 text-gray-900 line-clamp-2">
         {task.title}
