@@ -5,8 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 import { TimeInStage } from "@/components/common/TimeInStage";
+import { useMoveTask, useCancelTask } from "@/api/queries/tasks";
+import { useAgentModel } from "@/api/queries/agents";
 import { useUIStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
+import { ChevronRight, X } from "lucide-react";
 import type { Task } from "@/api/types";
 
 interface TaskCardProps {
@@ -17,6 +20,9 @@ interface TaskCardProps {
 
 export function TaskCard({ task, compact, isDragging }: TaskCardProps) {
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
+  const moveTask = useMoveTask();
+  const cancelTask = useCancelTask();
+  const agentModel = useAgentModel(task.assignedAgent);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -66,11 +72,37 @@ export function TaskCard({ task, compact, isDragging }: TaskCardProps) {
       </h4>
       <div className="flex items-center justify-between">
         {task.assignedAgent ? (
-          <AgentAvatar agentId={task.assignedAgent} size="sm" />
+          <AgentAvatar agentId={task.assignedAgent} model={agentModel} size="sm" />
         ) : (
           <span />
         )}
-        <TimeInStage updatedAt={task.updatedAt} />
+        <div className="flex items-center gap-1">
+          <TimeInStage updatedAt={task.updatedAt} />
+          {task.stage === "todo" && (
+            <>
+              <button
+                className="ml-1 p-0.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                title="Cancel task"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelTask.mutateAsync(task.id);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button
+                className="p-0.5 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+                title="Move to Product"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveTask.mutateAsync({ taskId: task.id, stage: "product" });
+                }}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {task.beadsId && (
         <div className="mt-1">

@@ -4,18 +4,27 @@ import { Badge } from "@/components/ui/badge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
+import { PipelineProgress } from "@/components/common/PipelineProgress";
+import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { TaskHistory } from "./TaskHistory";
 import { QualityGateStatus } from "./QualityGateStatus";
 import { HandoffViewer } from "./HandoffViewer";
 import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
-import { useTask } from "@/api/queries/tasks";
+import { TaskEditor } from "./TaskEditor";
+import { useTask, useMoveTask } from "@/api/queries/tasks";
+import { useAgentModel } from "@/api/queries/agents";
 import { useUIStore } from "@/stores/ui-store";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
+import { RefreshCw, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function TaskDetail() {
   const selectedTask = useUIStore((s) => s.selectedTask);
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
   const { data: task, isLoading } = useTask(selectedTask ?? "");
+  const agentModel = useAgentModel(task?.assignedAgent);
 
   const isOpen = !!selectedTask;
 
@@ -38,9 +47,9 @@ export function TaskDetail() {
           )}
         </SheetHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {task && (
-            <Tabs defaultValue="details" className="flex-1 flex flex-col">
+            <Tabs defaultValue="details" className="flex-1 min-h-0 flex flex-col">
               <TabsList className="mx-6 mt-4 self-start">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
@@ -53,17 +62,36 @@ export function TaskDetail() {
                 className="flex-1 px-6 py-4 overflow-y-auto"
               >
                 <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Pipeline Progress
+                    </label>
+                    <div className="mt-2">
+                      <PipelineProgress currentStage={task.stage} />
+                    </div>
+                  </div>
+
+                  {task.stage !== "done" && task.stage !== "todo" && (
+                    <TaskActions taskId={task.id} stage={task.stage} />
+                  )}
+
                   {task.assignedAgent && (
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Assigned Agent
                       </label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <AgentAvatar agentId={task.assignedAgent} size="md" />
-                        <span className="text-sm text-gray-800">
+                      <button
+                        className="flex items-center gap-2 mt-1 hover:bg-gray-50 rounded p-1 -ml-1 transition-colors"
+                        onClick={() => {
+                          setSelectedTask(null);
+                          setTimeout(() => useUIStore.getState().setSelectedAgent(task.assignedAgent!), 100);
+                        }}
+                      >
+                        <AgentAvatar agentId={task.assignedAgent} model={agentModel} size="md" />
+                        <span className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
                           {task.assignedAgent}
                         </span>
-                      </div>
+                      </button>
                     </div>
                   )}
 
@@ -72,9 +100,9 @@ export function TaskDetail() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Description
                       </label>
-                      <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
-                        {task.description}
-                      </p>
+                      <div className="mt-1">
+                        <MarkdownContent content={task.description} />
+                      </div>
                     </div>
                   )}
 
@@ -96,6 +124,9 @@ export function TaskDetail() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Edit (only for todo/product stages) */}
+                  <TaskEditor task={task} />
 
                   {/* Quality Gates */}
                   <div>
@@ -147,5 +178,51 @@ export function TaskDetail() {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function TaskActions({ taskId, stage }: { taskId: string; stage: string }) {
+  const queryClient = useQueryClient();
+
+  const retry = useMutation({
+    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/retry`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["task-history", taskId] });
+    },
+  });
+
+  const cancel = useMutation({
+    mutationFn: () => apiClient.post(`/api/tasks/${taskId}/cancel`, { reason: "Cancelled by operator" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+    },
+  });
+
+  return (
+    <div className="flex gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-1 text-xs"
+        onClick={() => retry.mutate()}
+        disabled={retry.isPending}
+      >
+        <RefreshCw className="w-3 h-3" />
+        {retry.isPending ? "Retrying..." : "Reset & Retry"}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+        onClick={() => cancel.mutate()}
+        disabled={cancel.isPending}
+      >
+        <Trash2 className="w-3 h-3" />
+        Cancel
+      </Button>
+    </div>
   );
 }

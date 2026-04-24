@@ -15,7 +15,7 @@ export function useMessages(taskId?: string) {
 export function usePendingMessages() {
   return useQuery({
     queryKey: ["messages", "pending"],
-    queryFn: () => apiClient.get<Message[]>("/api/messages/pending"),
+    queryFn: () => apiClient.get<Message[]>("/api/messages?status=pending"),
     refetchInterval: 5_000,
   });
 }

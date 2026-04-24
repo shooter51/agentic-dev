@@ -48,7 +48,7 @@ export function StatsPage() {
   ];
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-6 flex flex-col gap-6 overflow-y-auto h-full">
       <h1 className="text-xl font-semibold text-gray-900">Cost &amp; Pipeline Metrics</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

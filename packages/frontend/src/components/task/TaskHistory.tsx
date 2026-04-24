@@ -1,6 +1,66 @@
 import { useTaskHistory } from "@/api/queries/tasks";
+import { useAgentModel } from "@/api/queries/agents";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
+import type { TaskHistoryEvent } from "@/api/types";
+
+function WrenchIcon() {
+  return (
+    <svg
+      className="w-3.5 h-3.5 text-amber-500 flex-shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
+interface TaskHistoryEventDisplayProps {
+  agentId: string;
+}
+
+function TaskHistoryEventDisplay({ agentId }: TaskHistoryEventDisplayProps) {
+  const agentModel = useAgentModel(agentId);
+  return <AgentAvatar agentId={agentId} model={agentModel} size="sm" />;
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  stage_change: "Stage Change",
+  assignment: "Assignment",
+  quality_gate: "Quality Gate",
+  self_repair: "Self-Repair",
+  agent_error: "Agent Error",
+  handoff: "Handoff",
+  rejection: "Rejection",
+};
+
+function parseDetails(event: TaskHistoryEvent): string | null {
+  if (!event.details) return null;
+  try {
+    const parsed = JSON.parse(event.details);
+    if (event.event === "self_repair") {
+      return parsed.diagnosis || parsed.error || null;
+    }
+    if (event.event === "agent_error") {
+      return parsed.error || parsed.diagnosis || null;
+    }
+    if (event.event === "quality_gate") {
+      const failures = parsed.failures;
+      if (Array.isArray(failures) && failures.length > 0) {
+        return failures.join(", ");
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 interface TaskHistoryProps {
   taskId: string;
@@ -19,39 +79,53 @@ export function TaskHistory({ taskId }: TaskHistoryProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      {events.map((event, idx) => (
-        <div key={event.id} className="flex gap-3">
-          <div className="flex flex-col items-center">
-            <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-            {idx < events.length - 1 && (
-              <div className="w-px flex-1 bg-gray-200 mt-1" />
-            )}
-          </div>
-          <div className="flex-1 pb-3">
-            <div className="flex items-center gap-2 mb-0.5">
-              {event.agentId && (
-                <AgentAvatar agentId={event.agentId} size="sm" />
+      {events.map((event, idx) => {
+        const detailMessage = parseDetails(event);
+        const label = EVENT_LABELS[event.event] ?? event.event;
+        return (
+          <div key={event.id} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+              {idx < events.length - 1 && (
+                <div className="w-px flex-1 bg-gray-200 mt-1" />
               )}
-              <span className="text-xs font-medium text-gray-700">
-                {event.eventType}
-              </span>
-              <span className="text-xs text-gray-400">
-                {new Date(event.createdAt).toLocaleString()}
-              </span>
             </div>
-            {event.fromStage && event.toStage && (
-              <div className="flex items-center gap-1 mt-1">
-                <StageBadge stage={event.fromStage} />
-                <span className="text-xs text-gray-400">→</span>
-                <StageBadge stage={event.toStage} />
+            <div className="flex-1 pb-3">
+              <div className="flex items-center gap-2 mb-0.5">
+                {event.event === 'self_repair' ? (
+                  <WrenchIcon />
+                ) : event.event === 'agent_error' ? (
+                  <span className="w-3.5 h-3.5 text-red-500 flex-shrink-0">&#x26A0;</span>
+                ) : (
+                  event.agentId && <TaskHistoryEventDisplay agentId={event.agentId} />
+                )}
+                <span className="text-xs font-medium text-gray-700">
+                  {label}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {new Date(event.createdAt).toLocaleString()}
+                </span>
               </div>
-            )}
-            {event.message && (
-              <p className="text-xs text-gray-600 mt-1">{event.message}</p>
-            )}
+              {event.event === 'self_repair' && detailMessage && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event === 'agent_error' && detailMessage && (
+                <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event === 'quality_gate' && detailMessage && (
+                <p className="text-xs text-orange-700 bg-orange-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event !== 'self_repair' && event.fromValue && event.toValue && (
+                <div className="flex items-center gap-1 mt-1">
+                  <StageBadge stage={event.fromValue} />
+                  <span className="text-xs text-gray-400">→</span>
+                  <StageBadge stage={event.toValue} />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

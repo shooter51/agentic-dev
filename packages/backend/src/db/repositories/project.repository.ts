@@ -11,6 +11,10 @@ export class ProjectRepository {
     return this.db.select().from(projects).where(eq(projects.id, id)).get() ?? null;
   }
 
+  async findByPath(path: string): Promise<Project | null> {
+    return this.db.select().from(projects).where(eq(projects.path, path)).get() ?? null;
+  }
+
   async findAll(): Promise<Project[]> {
     return this.db.select().from(projects).orderBy(asc(projects.name));
   }

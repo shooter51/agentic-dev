@@ -26,6 +26,7 @@ export function useTaskHandoffs(taskId: string) {
     queryKey: ["handoffs", taskId],
     queryFn: () => apiClient.get<Handoff[]>(`/api/tasks/${taskId}/handoffs`),
     enabled: !!taskId,
+    refetchInterval: 10_000,
   });
 }
 
@@ -35,5 +36,6 @@ export function useTaskDeliverables(taskId: string) {
     queryFn: () =>
       apiClient.get<Deliverable[]>(`/api/tasks/${taskId}/deliverables`),
     enabled: !!taskId,
+    refetchInterval: 10_000,
   });
 }

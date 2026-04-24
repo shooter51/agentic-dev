@@ -1,29 +1,29 @@
 import { cn } from "@/lib/utils";
-import { Bot, Code, TestTube, Layers, Rocket } from "lucide-react";
+import { Bot, Code, TestTube, Layers, Rocket, FileText, Wrench } from "lucide-react";
+import { getAgentColor, type AgentModel } from "@/theme/agent-colors";
 
-const ROLE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  product: Layers,
+/**
+ * Icon mapping for different agent types.
+ * Maps agentId patterns to appropriate icons.
+ */
+const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  "product-manager": Layers,
   architect: Layers,
-  developer: Code,
-  tech_lead: Code,
-  qa: TestTube,
+  "dev-1": Code,
+  "dev-2": Code,
+  "dev-3": Code,
+  "tech-lead": Code,
   devops: Rocket,
+  "manual-qa": TestTube,
+  automation: Wrench,
+  documentation: FileText,
   default: Bot,
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  product: "bg-purple-100 text-purple-600",
-  architect: "bg-blue-100 text-blue-600",
-  developer: "bg-green-100 text-green-600",
-  tech_lead: "bg-cyan-100 text-cyan-600",
-  qa: "bg-yellow-100 text-yellow-600",
-  devops: "bg-orange-100 text-orange-600",
-  default: "bg-gray-100 text-gray-600",
 };
 
 interface AgentAvatarProps {
   agentId: string;
   role?: string;
+  model?: AgentModel;
   size?: "sm" | "md" | "lg";
   className?: string;
 }
@@ -31,12 +31,15 @@ interface AgentAvatarProps {
 export function AgentAvatar({
   agentId,
   role,
+  model,
   size = "md",
   className,
 }: AgentAvatarProps) {
-  const inferredRole = role ?? inferRoleFromId(agentId);
-  const Icon = ROLE_ICONS[inferredRole] ?? ROLE_ICONS.default;
-  const colorClass = ROLE_COLORS[inferredRole] ?? ROLE_COLORS.default;
+  // Get color tokens based on agentId and model strength
+  const colorTokens = getAgentColor(agentId, model);
+
+  // Get icon based on agentId, falling back to role inference for backward compatibility
+  const Icon = AGENT_ICONS[agentId] ?? AGENT_ICONS[inferRoleFromId(agentId)] ?? AGENT_ICONS.default;
 
   const sizeClasses = {
     sm: "w-5 h-5",
@@ -50,28 +53,38 @@ export function AgentAvatar({
     lg: "w-5 h-5",
   };
 
+  // Create enhanced title with display name and agent ID
+  const title = `${colorTokens.displayName} (${agentId})${model ? ` - ${model}` : ""}`;
+
   return (
     <span
       className={cn(
         "inline-flex items-center justify-center rounded-full",
-        colorClass,
+        colorTokens.avatarClassName,
         sizeClasses[size],
         className
       )}
-      title={agentId}
+      title={title}
     >
       <Icon className={iconSizeClasses[size]} />
     </span>
   );
 }
 
-function inferRoleFromId(agentId: string): string {
+/**
+ * Legacy role inference for backward compatibility.
+ * Maps old role patterns to agent icons.
+ */
+function inferRoleFromId(agentId: string | null | undefined): string {
+  if (!agentId) return "default";
   const lower = agentId.toLowerCase();
-  if (lower.includes("product")) return "product";
+  if (lower.includes("product")) return "product-manager";
   if (lower.includes("arch")) return "architect";
   if (lower.includes("devops") || lower.includes("deploy")) return "devops";
-  if (lower.includes("dev")) return "developer";
-  if (lower.includes("tech")) return "tech_lead";
-  if (lower.includes("qa") || lower.includes("test")) return "qa";
+  if (lower.includes("dev")) return "dev-1"; // Default to dev-1 icon
+  if (lower.includes("tech")) return "tech-lead";
+  if (lower.includes("qa") || lower.includes("test")) return "manual-qa";
+  if (lower.includes("automat")) return "automation";
+  if (lower.includes("doc")) return "documentation";
   return "default";
 }

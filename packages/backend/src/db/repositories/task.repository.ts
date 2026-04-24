@@ -90,11 +90,16 @@ export class TaskRepository {
   }
 
   async getBoardView(projectId: string): Promise<Record<string, Task[]>> {
-    const allTasks = await this.db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.projectId, projectId))
-      .orderBy(asc(tasks.priority), asc(tasks.createdAt));
+    const allTasks = projectId === 'all'
+      ? await this.db
+          .select()
+          .from(tasks)
+          .orderBy(asc(tasks.priority), asc(tasks.createdAt))
+      : await this.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.projectId, projectId))
+          .orderBy(asc(tasks.priority), asc(tasks.createdAt));
 
     return groupBy(allTasks, 'stage');
   }

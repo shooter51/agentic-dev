@@ -1,5 +1,5 @@
 export type Priority = "P0" | "P1" | "P2" | "P3" | "P4";
-export type TaskType = "feature" | "bug" | "chore" | "spike";
+export type TaskType = "feature" | "bug" | "chore" | "spike" | "task";
 
 export interface Task {
   id: string;
@@ -18,23 +18,27 @@ export interface Task {
 export interface TaskHistoryEvent {
   id: string;
   taskId: string;
-  eventType: string;
-  fromStage?: string;
-  toStage?: string;
+  event: string;       // was eventType
+  fromValue?: string;  // was fromStage
+  toValue?: string;    // was toStage
   agentId?: string;
-  message?: string;
+  details?: string;    // JSON string with event-specific data
   createdAt: string;
 }
 
-export type AgentStatus = "idle" | "busy" | "error" | "paused";
+export type AgentStatus = "idle" | "busy" | "error" | "paused" | "working";
 
 export interface Agent {
   id: string;
   name: string;
   role: string;
   status: AgentStatus;
-  currentTaskId?: string;
+  currentTaskId?: string;  // mapped from API's currentTask field
+  currentTask?: string;    // raw API field name
   lastHeartbeat?: string;
+  model?: string;
+  specialization?: string;
+  lastError?: string;
 }
 
 export interface Message {
@@ -57,7 +61,10 @@ export interface MessageThread {
 export interface Memory {
   id: string;
   agentId: string;
-  key: string;
-  value: string;
+  key?: string;
+  value?: string;
+  title?: string;
+  content?: string;
+  type?: string;
   updatedAt: string;
 }

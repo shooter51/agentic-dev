@@ -53,6 +53,20 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(404).send({ error: 'Agent not found' });
     }
 
+    // Clear lastError on resume
+    await db
+      .update(agentsTable)
+      .set({ updatedAt: new Date().toISOString() })
+      .where(eq(agentsTable.id, id));
+
+    // Best-effort clear lastError (column may exist)
+    try {
+      const { sql } = await import('drizzle-orm');
+      db.run(
+        sql`UPDATE agents SET last_error = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${id}`,
+      );
+    } catch { /* ignore if column doesn't exist yet */ }
+
     const orchestrator = (fastify as any).orchestrator;
     if (orchestrator) {
       await orchestrator.resumeAgent(id);
@@ -79,5 +93,17 @@ export default async function agentRoutes(fastify: FastifyInstance): Promise<voi
       .where(eq(agentsTable.id, id));
 
     return repo.findById(id);
+  });
+
+  // Get all handoffs created by this agent
+  fastify.get('/api/agents/:id/handoffs', async (request, _reply) => {
+    const { id } = request.params as { id: string };
+    const { handoffs } = await import('../db/schema/handoffs.js');
+    const result = await db
+      .select()
+      .from(handoffs)
+      .where(eq(handoffs.fromAgent, id))
+      .orderBy(handoffs.createdAt);
+    return result;
   });
 }

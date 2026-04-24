@@ -16,6 +16,8 @@ interface UpdateTaskBody {
   title?: string;
   description?: string;
   priority?: 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
+  metadata?: Record<string, unknown> | string;
+  branchName?: string;
 }
 
 interface ForceMoveBody {
@@ -90,9 +92,28 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
     }
 
     const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+
+    // Merge metadata as object (handle string input too)
+    let mergedMetadata: string | undefined;
+    if (body.metadata !== undefined) {
+      const existingMeta: Record<string, unknown> = JSON.parse(task.metadata ?? '{}');
+      const incomingMeta: Record<string, unknown> =
+        typeof body.metadata === 'string'
+          ? (JSON.parse(body.metadata) as Record<string, unknown>)
+          : body.metadata;
+      mergedMetadata = JSON.stringify({ ...existingMeta, ...incomingMeta });
+    }
+
+    const { metadata: _metadata, ...bodyWithoutMeta } = body;
+    void _metadata;
+
     await db
       .update(tasksTable)
-      .set({ ...body, updatedAt: new Date().toISOString() })
+      .set({
+        ...bodyWithoutMeta,
+        ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {}),
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(tasksTable.id, id));
 
     const updated = await repo.findById(id);
@@ -217,6 +238,47 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
       taskId: id,
       projectId: task.projectId,
       stage: reopened?.stage ?? 'todo',
+      timestamp: new Date().toISOString(),
+    });
+
+    return { success: true };
+  });
+
+  // Reset a stuck task — clears retry counter and assignment so dispatch retries
+  fastify.post('/api/tasks/:id/retry', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const task = await repo.findById(id);
+    if (!task) {
+      return reply.code(404).send({ error: 'Task not found' });
+    }
+
+    // Clear assigned agent
+    const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+    await db
+      .update(tasksTable)
+      .set({ assignedAgent: null, updatedAt: new Date().toISOString() })
+      .where(eq(tasksTable.id, id));
+
+    // Clear retry counter in the orchestrator
+    const orchestrator = (fastify as any).orchestrator;
+    if (orchestrator?.taskRetries) {
+      orchestrator.taskRetries.delete(id);
+    }
+
+    // Resume any errored agents that were working on this task
+    const agents = await db.select().from((await import('../db/schema/agents.js')).agents);
+    for (const agent of agents) {
+      if (agent.status === 'error') {
+        try {
+          orchestrator?.resumeAgent(agent.id);
+        } catch { /* ignore */ }
+      }
+    }
+
+    (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.TASK_UPDATED, {
+      taskId: id,
+      projectId: task.projectId,
+      stage: task.stage,
       timestamp: new Date().toISOString(),
     });
 
