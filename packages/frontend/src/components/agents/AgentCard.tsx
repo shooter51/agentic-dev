@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Agent } from "@/api/types";
+import type { AgentModel } from "@/theme/agent-colors";
 
 const STATUS_BADGE: Record<
   Agent["status"],
@@ -39,7 +40,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
     >
       <div className="flex items-start gap-3 p-3">
         <div className="relative flex-shrink-0">
-          <AgentAvatar agentId={agent.id} role={agent.role} size="md" />
+          <AgentAvatar agentId={agent.id} model={agent.model as AgentModel} size="md" />
           <span
             className={cn(
               "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white",
@@ -56,7 +57,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
           <div className="flex items-center gap-2">
             <button
               className={cn(
-                "text-sm font-medium text-gray-900 truncate text-left",
+                "text-sm font-medium text-gray-900 text-left",
                 onSelect && "hover:text-blue-600 hover:underline cursor-pointer"
               )}
               onClick={() => onSelect?.(agent.id)}
@@ -121,7 +122,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
             >
               Retry
             </Button>
-          ) : agent.status !== "idle" ? (
+          ) : (agent.status === "idle" || agent.status === "working" || agent.status === "busy") ? (
             <Button
               size="sm"
               variant="ghost"

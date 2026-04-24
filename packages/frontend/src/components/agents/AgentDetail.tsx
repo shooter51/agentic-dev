@@ -170,11 +170,14 @@ export function AgentDetail({ agentId, onClose }: AgentDetailProps) {
 
             <TabsContent value="live" className="flex-1 min-h-0 px-6 py-4 overflow-y-auto">
               {agentId && <LiveOutput agentId={agentId} />}
-              {/* Also show the most recent handoff as the latest completed output */}
+              {/* Also show the most recent handoff as the last completed work */}
               {handoffs && handoffs.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    Latest Completed Output
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                    Last Completed Work
+                  </p>
+                  <p className="text-xs text-gray-400 mb-2">
+                    Task: {handoffs[handoffs.length - 1].taskId}
                   </p>
                   <HandoffItem handoff={handoffs[handoffs.length - 1]} />
                 </div>

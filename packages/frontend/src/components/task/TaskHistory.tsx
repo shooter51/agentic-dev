@@ -2,6 +2,7 @@ import { useTaskHistory } from "@/api/queries/tasks";
 import { useAgentModel } from "@/api/queries/agents";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
+import type { TaskHistoryEvent } from "@/api/types";
 
 function WrenchIcon() {
   return (
@@ -28,6 +29,39 @@ function TaskHistoryEventDisplay({ agentId }: TaskHistoryEventDisplayProps) {
   return <AgentAvatar agentId={agentId} model={agentModel} size="sm" />;
 }
 
+const EVENT_LABELS: Record<string, string> = {
+  stage_change: "Stage Change",
+  assignment: "Assignment",
+  quality_gate: "Quality Gate",
+  self_repair: "Self-Repair",
+  agent_error: "Agent Error",
+  handoff: "Handoff",
+  rejection: "Rejection",
+};
+
+function parseDetails(event: TaskHistoryEvent): string | null {
+  if (!event.details) return null;
+  try {
+    const parsed = JSON.parse(event.details);
+    if (event.event === "self_repair") {
+      return parsed.diagnosis || parsed.error || null;
+    }
+    if (event.event === "agent_error") {
+      return parsed.error || parsed.diagnosis || null;
+    }
+    if (event.event === "quality_gate") {
+      const failures = parsed.failures;
+      if (Array.isArray(failures) && failures.length > 0) {
+        return failures.join(", ");
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 interface TaskHistoryProps {
   taskId: string;
 }
@@ -45,49 +79,53 @@ export function TaskHistory({ taskId }: TaskHistoryProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      {events.map((event, idx) => (
-        <div key={event.id} className="flex gap-3">
-          <div className="flex flex-col items-center">
-            <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-            {idx < events.length - 1 && (
-              <div className="w-px flex-1 bg-gray-200 mt-1" />
-            )}
-          </div>
-          <div className="flex-1 pb-3">
-            <div className="flex items-center gap-2 mb-0.5">
-              {event.eventType === 'self_repair' ? (
-                <WrenchIcon />
-              ) : event.eventType === 'agent_error' ? (
-                <span className="w-3.5 h-3.5 text-red-500 flex-shrink-0">&#x26A0;</span>
-              ) : (
-                event.agentId && <TaskHistoryEventDisplay agentId={event.agentId} />
+      {events.map((event, idx) => {
+        const detailMessage = parseDetails(event);
+        const label = EVENT_LABELS[event.event] ?? event.event;
+        return (
+          <div key={event.id} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+              {idx < events.length - 1 && (
+                <div className="w-px flex-1 bg-gray-200 mt-1" />
               )}
-              <span className="text-xs font-medium text-gray-700">
-                {event.eventType === 'self_repair' ? 'Self-Repair' : event.eventType === 'agent_error' ? 'Agent Error' : event.eventType}
-              </span>
-              <span className="text-xs text-gray-400">
-                {new Date(event.createdAt).toLocaleString()}
-              </span>
             </div>
-            {event.eventType === 'self_repair' && event.message && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1">{event.message}</p>
-            )}
-            {event.eventType === 'agent_error' && event.message && (
-              <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 mt-1">{event.message}</p>
-            )}
-            {event.eventType !== 'self_repair' && event.fromStage && event.toStage && (
-              <div className="flex items-center gap-1 mt-1">
-                <StageBadge stage={event.fromStage} />
-                <span className="text-xs text-gray-400">→</span>
-                <StageBadge stage={event.toStage} />
+            <div className="flex-1 pb-3">
+              <div className="flex items-center gap-2 mb-0.5">
+                {event.event === 'self_repair' ? (
+                  <WrenchIcon />
+                ) : event.event === 'agent_error' ? (
+                  <span className="w-3.5 h-3.5 text-red-500 flex-shrink-0">&#x26A0;</span>
+                ) : (
+                  event.agentId && <TaskHistoryEventDisplay agentId={event.agentId} />
+                )}
+                <span className="text-xs font-medium text-gray-700">
+                  {label}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {new Date(event.createdAt).toLocaleString()}
+                </span>
               </div>
-            )}
-            {event.eventType !== 'self_repair' && event.message && (
-              <p className="text-xs text-gray-600 mt-1">{event.message}</p>
-            )}
+              {event.event === 'self_repair' && detailMessage && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event === 'agent_error' && detailMessage && (
+                <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event === 'quality_gate' && detailMessage && (
+                <p className="text-xs text-orange-700 bg-orange-50 rounded px-2 py-1 mt-1">{detailMessage}</p>
+              )}
+              {event.event !== 'self_repair' && event.fromValue && event.toValue && (
+                <div className="flex items-center gap-1 mt-1">
+                  <StageBadge stage={event.fromValue} />
+                  <span className="text-xs text-gray-400">→</span>
+                  <StageBadge stage={event.toValue} />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

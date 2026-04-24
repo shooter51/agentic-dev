@@ -18,11 +18,11 @@ export interface Task {
 export interface TaskHistoryEvent {
   id: string;
   taskId: string;
-  eventType: string;
-  fromStage?: string;
-  toStage?: string;
+  event: string;       // was eventType
+  fromValue?: string;  // was fromStage
+  toValue?: string;    // was toStage
   agentId?: string;
-  message?: string;
+  details?: string;    // JSON string with event-specific data
   createdAt: string;
 }
 

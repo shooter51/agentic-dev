@@ -33,9 +33,9 @@ export function ProjectInfo() {
 
   const STAGE_LABELS: Record<string, string> = {
     todo: "Todo", product: "Product", architecture: "Architecture",
-    development: "Development", tech_lead_review: "TL Review",
-    devops_build: "Build", manual_qa: "QA", automation: "Automation",
-    documentation: "Docs", devops_deploy: "Deploy", arch_review: "Arch Review",
+    development: "Development", tech_lead_review: "Tech Lead Review",
+    devops_build: "DevOps Build", manual_qa: "Manual QA", automation: "Automation",
+    documentation: "Docs", devops_deploy: "DevOps Deploy", arch_review: "Arch Review",
     done: "Done",
   };
 
