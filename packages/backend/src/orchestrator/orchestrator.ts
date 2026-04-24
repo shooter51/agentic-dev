@@ -37,6 +37,8 @@ import { LoopDetector } from './loop-detector';
 import { buildInterruptSystemPrompt, type AgentContext } from './context-builder';
 import { runAgentWithErrorHandling } from './cli-runner';
 import type { RunnerDeps } from './cli-runner';
+import { attemptSelfRepair } from './self-repair';
+import type { RepairContext } from './self-repair';
 
 // ---------------------------------------------------------------------------
 // SSEBroadcaster — minimal interface; full implementation lives in the SSE
@@ -603,8 +605,8 @@ export class Orchestrator {
   // Error handling (private)
   // -------------------------------------------------------------------------
 
-  /** Tracks per-task retry attempts: taskId -> { count, lastAgentId, lastError } */
-  private readonly taskRetries: Map<string, { count: number; agents: Set<string>; lastError: string }> = new Map();
+  /** Tracks per-task retry attempts: taskId -> { count, agents, errors } */
+  private readonly taskRetries: Map<string, { count: number; agents: Set<string>; errors: string[] }> = new Map();
   private static readonly MAX_TASK_RETRIES = 5;
 
   private handleAgentError(agentId: string, taskId: string, err: unknown): void {
@@ -612,10 +614,10 @@ export class Orchestrator {
     const isTransient = this.classifyError(errorMessage);
 
     // Track retries per task
-    const retryState = this.taskRetries.get(taskId) ?? { count: 0, agents: new Set<string>(), lastError: '' };
+    const retryState = this.taskRetries.get(taskId) ?? { count: 0, agents: new Set<string>(), errors: [] };
     retryState.count++;
     retryState.agents.add(agentId);
-    retryState.lastError = errorMessage;
+    retryState.errors.push(errorMessage);
     this.taskRetries.set(taskId, retryState);
 
     console.error(`[SelfHeal] Agent ${agentId} failed on task ${taskId} (attempt ${retryState.count}/${Orchestrator.MAX_TASK_RETRIES}, ${isTransient ? 'transient' : 'permanent'}): ${errorMessage.slice(0, 200)}`);
@@ -652,10 +654,80 @@ export class Orchestrator {
     // --- Self-healing strategy ---
 
     if (retryState.count >= Orchestrator.MAX_TASK_RETRIES) {
-      // Give up — too many retries
-      console.warn(`[SelfHeal] Task ${taskId} failed ${retryState.count} times across agents [${[...retryState.agents].join(', ')}]. Giving up — manual intervention required.`);
+      // Attempt self-repair instead of giving up
+      console.warn(`[SelfHeal] Task ${taskId} failed ${retryState.count} times — attempting self-repair.`);
+
+      const fetchAndRepair = async () => {
+        const task = await this.taskRepo.findById(taskId);
+        const project = task
+          ? await this.db.select().from(projects).where(eq(projects.id, task.projectId)).get()
+          : null;
+
+        if (task && project) {
+          const repairContext: RepairContext = {
+            taskId,
+            taskTitle: task.title,
+            taskStage: task.stage,
+            taskDescription: task.description ?? null,
+            projectPath: project.path,
+            projectId: project.id,
+            errorHistory: [...retryState.errors],
+            failedAgents: [...retryState.agents],
+            isAgenticDevProject: project.path.includes('agentic-dev'),
+          };
+
+          const result = await attemptSelfRepair(repairContext, {
+            db: this.db,
+            sseBroadcaster: this.sseBroadcaster,
+            costTracker: this.costTracker,
+          });
+
+          // Insert task_history entry for the repair attempt
+          try {
+            const { taskHistory } = await import('../db/schema/task-history.js');
+            const { ulid: newUlid } = await import('ulid');
+            await this.db.insert(taskHistory).values({
+              id: newUlid(),
+              taskId,
+              event: 'self_repair',
+              fromValue: null,
+              toValue: result.success ? 'repaired' : 'repair_failed',
+              agentId: null,
+              details: JSON.stringify({
+                success: result.success,
+                diagnosis: result.diagnosis,
+                filesChanged: result.filesChanged,
+                commitHash: result.commitHash,
+                requiresOperatorApproval: result.requiresOperatorApproval,
+              }),
+              createdAt: new Date().toISOString(),
+            });
+          } catch (histErr) {
+            console.warn('[SelfHeal] Failed to insert task_history for self_repair:', histErr);
+          }
+
+          if (result.success && !result.requiresOperatorApproval) {
+            // Reset retry counter — the dispatch loop will re-pick the task
+            this.taskRetries.delete(taskId);
+            console.log(`[SelfHeal] Repair succeeded for task ${taskId}. Re-dispatching.`);
+          } else if (result.requiresOperatorApproval) {
+            this.sseBroadcaster.emit('self-repair-approval-needed', {
+              taskId,
+              diagnosis: result.diagnosis,
+              filesChanged: result.filesChanged,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } else {
+          console.warn(`[SelfHeal] Could not load task/project for repair of task ${taskId}`);
+        }
+      };
+
+      fetchAndRepair().catch((repairErr) => {
+        console.error(`[SelfHeal] Repair failed for task ${taskId}:`, repairErr);
+      });
+
       this.setAgentStatus(agentId, 'idle').catch(() => {});
-      this.taskRetries.delete(taskId);
       return;
     }
 

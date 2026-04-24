@@ -41,4 +41,20 @@ export const SSE_QUERY_MAP: Record<string, QueryKeyFn> = {
     const d = data as { agentId: string };
     return [["agents"], ["agents", d.agentId]];
   },
+  "self-repair-started": (data) => {
+    const d = data as { taskId: string };
+    return [["task-history", d.taskId]];
+  },
+  "self-repair-completed": (data) => {
+    const d = data as { taskId: string };
+    return [["task-history", d.taskId], ["tasks", d.taskId]];
+  },
+  "self-repair-failed": (data) => {
+    const d = data as { taskId: string };
+    return [["task-history", d.taskId]];
+  },
+  "self-repair-approval-needed": (data) => {
+    const d = data as { taskId: string };
+    return [["task-history", d.taskId]];
+  },
 };

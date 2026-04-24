@@ -10,7 +10,7 @@ export const taskHistory = sqliteTable(
       .notNull()
       .references(() => tasks.id),
     event: text('event', {
-      enum: ['stage_change', 'assignment', 'message', 'handoff', 'rejection', 'quality_gate'],
+      enum: ['stage_change', 'assignment', 'message', 'handoff', 'rejection', 'quality_gate', 'self_repair'],
     }).notNull(),
     fromValue: text('from_value'),
     toValue: text('to_value'),

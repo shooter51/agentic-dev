@@ -2,6 +2,22 @@ import { useTaskHistory } from "@/api/queries/tasks";
 import { StageBadge } from "@/components/common/StageBadge";
 import { AgentAvatar } from "@/components/common/AgentAvatar";
 
+function WrenchIcon() {
+  return (
+    <svg
+      className="w-3.5 h-3.5 text-amber-500 flex-shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
 interface TaskHistoryProps {
   taskId: string;
 }
@@ -29,24 +45,29 @@ export function TaskHistory({ taskId }: TaskHistoryProps) {
           </div>
           <div className="flex-1 pb-3">
             <div className="flex items-center gap-2 mb-0.5">
-              {event.agentId && (
-                <AgentAvatar agentId={event.agentId} size="sm" />
+              {event.eventType === 'self_repair' ? (
+                <WrenchIcon />
+              ) : (
+                event.agentId && <AgentAvatar agentId={event.agentId} size="sm" />
               )}
               <span className="text-xs font-medium text-gray-700">
-                {event.eventType}
+                {event.eventType === 'self_repair' ? 'Self-Repair' : event.eventType}
               </span>
               <span className="text-xs text-gray-400">
                 {new Date(event.createdAt).toLocaleString()}
               </span>
             </div>
-            {event.fromStage && event.toStage && (
+            {event.eventType === 'self_repair' && event.message && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1">{event.message}</p>
+            )}
+            {event.eventType !== 'self_repair' && event.fromStage && event.toStage && (
               <div className="flex items-center gap-1 mt-1">
                 <StageBadge stage={event.fromStage} />
                 <span className="text-xs text-gray-400">→</span>
                 <StageBadge stage={event.toStage} />
               </div>
             )}
-            {event.message && (
+            {event.eventType !== 'self_repair' && event.message && (
               <p className="text-xs text-gray-600 mt-1">{event.message}</p>
             )}
           </div>
