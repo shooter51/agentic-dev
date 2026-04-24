@@ -41,6 +41,7 @@ export class TaskRepository {
         and(
           notInArray(tasks.stage, ['todo', 'done', 'cancelled', 'deferred']),
           isNull(tasks.assignedAgent),
+          isNull(tasks.awaitingApproval),
           sql`NOT EXISTS (
             SELECT 1 FROM tasks AS child
             WHERE child.parent_task_id = ${tasks.id}

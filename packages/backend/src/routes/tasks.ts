@@ -11,6 +11,7 @@ interface CreateTaskBody {
   priority?: 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
   type?: 'feature' | 'bug' | 'task' | 'chore';
   pipelineMode?: 'standard' | 'qa_automation';
+  hitlStages?: string[];
 }
 
 interface UpdateTaskBody {
@@ -24,6 +25,14 @@ interface UpdateTaskBody {
 interface ForceMoveBody {
   stage: string;
 }
+
+const VALID_STAGE_NAMES = [
+  'todo', 'product', 'architecture', 'development', 'tech_lead_review',
+  'devops_build', 'manual_qa', 'automation', 'documentation',
+  'devops_deploy', 'arch_review', 'done',
+];
+
+const QA_STAGES = ['manual_qa', 'automation'];
 
 interface CancelBody {
   reason?: string;
@@ -48,8 +57,11 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
     const body = request.body as CreateTaskBody;
 
     const pipelineMode = body.pipelineMode ?? 'standard';
-    // QA Automation mode starts directly in manual_qa, skipping the build stages
     const initialStage = pipelineMode === 'qa_automation' ? 'manual_qa' : 'todo';
+
+    // Validate and filter hitlStages against valid stages for this pipeline mode
+    const validStages = pipelineMode === 'qa_automation' ? QA_STAGES : VALID_STAGE_NAMES;
+    const hitlStages = body.hitlStages?.filter((s) => validStages.includes(s)) ?? [];
 
     const task = await repo.create({
       projectId,
@@ -59,6 +71,8 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
       priority: body.priority ?? 'P2',
       type: body.type ?? 'feature',
       pipelineMode,
+      hitlStages: hitlStages.length > 0 ? JSON.stringify(hitlStages) : null,
+      awaitingApproval: null,
       assignedAgent: null,
       parentTaskId: null,
       beadsId: null,
@@ -144,11 +158,17 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(404).send({ error: 'Task not found' });
     }
 
+    // Clear HITL approval block on force-move
+    const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+    await db
+      .update(tasksTable)
+      .set({ awaitingApproval: null })
+      .where(eq(tasksTable.id, id));
+
     const pipeline = (fastify as any).pipeline;
     if (pipeline) {
       await pipeline.forceMove(id, body.stage, 'operator');
     } else {
-      // Fallback: direct DB update when pipeline not wired
       await repo.updateStage(id, body.stage as any);
     }
 
@@ -285,6 +305,48 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
       taskId: id,
       projectId: task.projectId,
       stage: task.stage,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { success: true };
+  });
+
+  // Approve a HITL-blocked task — clears awaitingApproval and advances the pipeline
+  fastify.post('/api/tasks/:id/approve', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const task = await repo.findById(id);
+    if (!task) {
+      return reply.code(404).send({ error: 'Task not found' });
+    }
+    if (!task.awaitingApproval) {
+      return reply.code(400).send({ error: 'Task is not awaiting approval' });
+    }
+
+    const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+
+    // Clear the approval block
+    await db
+      .update(tasksTable)
+      .set({ awaitingApproval: null, updatedAt: new Date().toISOString() })
+      .where(eq(tasksTable.id, id));
+
+    // Advance the pipeline
+    const pipeline = (fastify as any).pipeline;
+    if (pipeline) {
+      const result = await pipeline.advance(id, 'operator');
+      if (!result.success) {
+        // Force-move if guards block — use pipeline FSM's own logic
+        await pipeline.forceMove(id, task.stage === 'automation' && (task as any).pipelineMode === 'qa_automation' ? 'done' : undefined, 'operator');
+      }
+    }
+
+    // Re-fetch to get the updated stage
+    const updated = await repo.findById(id);
+
+    (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.TASK_UPDATED, {
+      taskId: id,
+      projectId: task.projectId,
+      stage: updated?.stage ?? task.stage,
       timestamp: new Date().toISOString(),
     });
 

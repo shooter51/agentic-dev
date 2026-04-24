@@ -33,6 +33,8 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     prUrl: null,
     metadata: null,
     pipelineMode: 'standard',
+    hitlStages: null,
+    awaitingApproval: null,
     createdAt: now,
     updatedAt: now,
     ...overrides,

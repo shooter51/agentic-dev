@@ -20,7 +20,21 @@ interface CreateTaskPayload {
   priority: Priority;
   type: TaskType;
   pipelineMode: PipelineMode;
+  hitlStages?: string[];
 }
+
+const HITL_STAGES = [
+  { value: "product", label: "Product" },
+  { value: "architecture", label: "Architecture" },
+  { value: "development", label: "Development" },
+  { value: "tech_lead_review", label: "Tech Lead Review" },
+  { value: "devops_build", label: "DevOps Build" },
+  { value: "manual_qa", label: "Manual QA" },
+  { value: "automation", label: "Automation" },
+  { value: "documentation", label: "Documentation" },
+  { value: "devops_deploy", label: "DevOps Deploy" },
+  { value: "arch_review", label: "Arch Review" },
+] as const;
 
 export function CreateTaskDialog() {
   const [open, setOpen] = useState(false);
@@ -29,6 +43,16 @@ export function CreateTaskDialog() {
   const [priority, setPriority] = useState<Priority>("P2");
   const [type, setType] = useState<TaskType>("task" as TaskType);
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("standard");
+  const [hitlStages, setHitlStages] = useState<Set<string>>(new Set());
+
+  // Clear invalid HITL stages when pipeline mode changes
+  const handlePipelineModeChange = (mode: PipelineMode) => {
+    setPipelineMode(mode);
+    if (mode === "qa_automation") {
+      const qaValid = new Set(["manual_qa", "automation"]);
+      setHitlStages((prev) => new Set([...prev].filter((s) => qaValid.has(s))));
+    }
+  };
 
   const selectedProject = useUIStore((s) => s.selectedProject);
   const queryClient = useQueryClient();
@@ -52,13 +76,21 @@ export function CreateTaskDialog() {
       setPriority("P2");
       setType("task" as TaskType);
       setPipelineMode("standard");
+      setHitlStages(new Set());
     },
   });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !effectiveProject) return;
-    createTask.mutate({ title: title.trim(), description: description.trim() || undefined, priority, type, pipelineMode });
+    createTask.mutate({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      priority,
+      type,
+      pipelineMode,
+      hitlStages: hitlStages.size > 0 ? Array.from(hitlStages) : undefined,
+    });
   }
 
   return (
@@ -137,7 +169,7 @@ export function CreateTaskDialog() {
             <label className="text-xs font-medium text-gray-700 block mb-1">Pipeline Mode</label>
             <select
               value={pipelineMode}
-              onChange={(e) => setPipelineMode(e.target.value as PipelineMode)}
+              onChange={(e) => handlePipelineModeChange(e.target.value as PipelineMode)}
               className="w-full text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="standard">Standard — Full 12-stage pipeline</option>
@@ -148,6 +180,39 @@ export function CreateTaskDialog() {
                 Task starts at Manual QA, then Automation, then Done. Skips product, architecture, development, and deployment stages.
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-2">
+              Person in the Loop
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Check stages where you want to review and approve before the pipeline continues.
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+              {(pipelineMode === "qa_automation"
+                ? HITL_STAGES.filter((s) => s.value === "manual_qa" || s.value === "automation")
+                : HITL_STAGES
+              ).map((stage) => (
+                <label
+                  key={stage.value}
+                  className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-50 rounded px-1.5 py-1"
+                >
+                  <input
+                    type="checkbox"
+                    checked={hitlStages.has(stage.value)}
+                    onChange={(e) => {
+                      const next = new Set(hitlStages);
+                      if (e.target.checked) next.add(stage.value);
+                      else next.delete(stage.value);
+                      setHitlStages(next);
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  {stage.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

@@ -46,6 +46,20 @@ export function useMoveTask() {
   });
 }
 
+export function useApproveTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiClient.post(`/api/tasks/${taskId}/approve`, {}),
+    onSuccess: (_data, taskId) => {
+      queryClient.invalidateQueries({ queryKey: ["board"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["task-history", taskId] });
+    },
+  });
+}
+
 export function useCancelTask() {
   const queryClient = useQueryClient();
 

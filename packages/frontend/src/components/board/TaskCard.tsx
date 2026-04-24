@@ -77,6 +77,12 @@ export function TaskCard({ task, compact, isDragging }: TaskCardProps) {
       <h4 className="text-sm font-medium mb-2 text-gray-900 line-clamp-2">
         {task.title}
       </h4>
+      {task.awaitingApproval && (
+        <div className="mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          Awaiting approval
+        </div>
+      )}
       <div className="flex items-center justify-between">
         {task.assignedAgent ? (
           <AgentAvatar agentId={task.assignedAgent} model={agentModel} size="sm" />

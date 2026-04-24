@@ -8,6 +8,7 @@ import deliverableRoutes from './deliverables.js';
 import eventsRoute from './events.js';
 import statsRoutes from './stats.js';
 import helpRoute from './help.js';
+import fileRoutes from './files.js';
 
 /**
  * Register all API route plugins on the Fastify instance.
@@ -23,4 +24,5 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   await fastify.register(eventsRoute);
   await fastify.register(statsRoutes);
   await fastify.register(helpRoute);
+  await fastify.register(fileRoutes);
 }

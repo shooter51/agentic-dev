@@ -37,6 +37,8 @@ export const tasks = sqliteTable(
     pipelineMode: text('pipeline_mode', {
       enum: ['standard', 'qa_automation'],
     }).notNull().default('standard'),
+    hitlStages: text('hitl_stages'), // JSON array of stage names requiring human approval
+    awaitingApproval: text('awaiting_approval'), // stage name if blocked waiting for human approval
     branchName: text('branch_name'),
     prUrl: text('pr_url'),
     metadata: text('metadata'), // JSON

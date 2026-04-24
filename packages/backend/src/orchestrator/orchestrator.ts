@@ -513,14 +513,27 @@ export class Orchestrator {
           // Auto-set gate metadata since MCP tools are not available in CLI mode
           await this.autoSetGateMetadata(taskId, task.stage, result.summary);
 
-          const advanceResult = await this.pipeline.advance(taskId, agentId);
-          if (!advanceResult.success) {
-            console.warn(`[Dispatch] Pipeline advance failed for ${taskId}: ${advanceResult.error || JSON.stringify(advanceResult.failures)}`);
-            // Force-move past the gate since the agent completed its work
-            const nextStage = this.getNextStage(task.stage);
-            if (nextStage) {
-              console.log(`[Dispatch] Force-advancing ${taskId} from ${task.stage} to ${nextStage}`);
-              await this.pipeline.forceMove(taskId, nextStage as any, agentId);
+          // Check HITL (human-in-the-loop) — if this stage requires approval, pause
+          const hitlStages: string[] = task.hitlStages ? JSON.parse(task.hitlStages as string) : [];
+          if (hitlStages.includes(task.stage)) {
+            console.log(`[HITL] Task ${taskId} requires human approval after ${task.stage}`);
+            this.db.run(
+              sql`UPDATE tasks SET awaiting_approval = ${task.stage}, assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${taskId}`,
+            );
+            this.sseBroadcaster.emit('task-awaiting-approval', {
+              taskId,
+              stage: task.stage,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            const advanceResult = await this.pipeline.advance(taskId, agentId);
+            if (!advanceResult.success) {
+              console.warn(`[Dispatch] Pipeline advance failed for ${taskId}: ${advanceResult.error || JSON.stringify(advanceResult.failures)}`);
+              const nextStage = this.getNextStage(task.stage);
+              if (nextStage) {
+                console.log(`[Dispatch] Force-advancing ${taskId} from ${task.stage} to ${nextStage}`);
+                await this.pipeline.forceMove(taskId, nextStage as any, agentId);
+              }
             }
           }
           this.clearTaskRetries(taskId);
@@ -978,7 +991,7 @@ export class Orchestrator {
     'devops_deploy', 'arch_review', 'done',
   ];
 
-  private getNextStage(currentStage: string): string | null {
+  getNextStage(currentStage: string): string | null {
     const idx = Orchestrator.STAGE_ORDER.indexOf(currentStage);
     if (idx < 0 || idx >= Orchestrator.STAGE_ORDER.length - 1) return null;
     return Orchestrator.STAGE_ORDER[idx + 1]!;

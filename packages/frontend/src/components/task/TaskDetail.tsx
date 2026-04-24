@@ -12,12 +12,12 @@ import { HandoffViewer } from "./HandoffViewer";
 import { DeliverableList } from "./DeliverableList";
 import { CommunicationFeed } from "@/components/messages/CommunicationFeed";
 import { TaskEditor } from "./TaskEditor";
-import { useTask, useMoveTask } from "@/api/queries/tasks";
+import { useTask, useMoveTask, useApproveTask } from "@/api/queries/tasks";
 import { useAgentModel } from "@/api/queries/agents";
 import { useUIStore } from "@/stores/ui-store";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function TaskDetail() {
@@ -70,6 +70,10 @@ export function TaskDetail() {
                       <PipelineProgress currentStage={task.stage} />
                     </div>
                   </div>
+
+                  {task.awaitingApproval && (
+                    <ApprovalBanner taskId={task.id} stage={task.awaitingApproval} />
+                  )}
 
                   {task.stage !== "done" && task.stage !== "todo" && (
                     <TaskActions taskId={task.id} stage={task.stage} />
@@ -223,6 +227,41 @@ function TaskActions({ taskId, stage }: { taskId: string; stage: string }) {
         <Trash2 className="w-3 h-3" />
         Cancel
       </Button>
+    </div>
+  );
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  product: "Product", architecture: "Architecture", development: "Development",
+  tech_lead_review: "Tech Lead Review", devops_build: "DevOps Build",
+  manual_qa: "Manual QA", automation: "Automation", documentation: "Documentation",
+  devops_deploy: "DevOps Deploy", arch_review: "Arch Review",
+};
+
+function ApprovalBanner({ taskId, stage }: { taskId: string; stage: string }) {
+  const approve = useApproveTask();
+
+  return (
+    <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-amber-900">
+            Awaiting your approval
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            {STAGE_LABELS[stage] ?? stage} stage is complete. Review the work and approve to continue the pipeline.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+          onClick={() => approve.mutate(taskId)}
+          disabled={approve.isPending}
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          {approve.isPending ? "Approving..." : "Approve & Continue"}
+        </Button>
+      </div>
     </div>
   );
 }

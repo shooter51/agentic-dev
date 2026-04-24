@@ -9,6 +9,8 @@ export interface Task {
   priority: Priority;
   type: TaskType;
   pipelineMode?: PipelineMode;
+  hitlStages?: string[] | string; // API returns JSON string, parsed client-side
+  awaitingApproval?: string | null;
   assignedAgent?: string;
   projectId: string;
   beadsId?: string;

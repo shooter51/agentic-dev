@@ -64,9 +64,15 @@ async function start() {
   // -- ALTER TABLE: add pipeline_mode column if not exists --------------------
   try {
     await db.run(sql`ALTER TABLE tasks ADD COLUMN pipeline_mode TEXT NOT NULL DEFAULT 'standard'`);
-  } catch {
-    // Column already exists — ignore
-  }
+  } catch { /* already exists */ }
+
+  // -- ALTER TABLE: add HITL columns if not exists ----------------------------
+  try {
+    await db.run(sql`ALTER TABLE tasks ADD COLUMN hitl_stages TEXT`);
+  } catch { /* already exists */ }
+  try {
+    await db.run(sql`ALTER TABLE tasks ADD COLUMN awaiting_approval TEXT`);
+  } catch { /* already exists */ }
 
   // -- DB seed ----------------------------------------------------------------
   await seedAgents(db);

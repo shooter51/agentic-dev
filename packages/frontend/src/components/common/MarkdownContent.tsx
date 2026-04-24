@@ -1,13 +1,44 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui-store";
+import { useNavigate } from "react-router-dom";
+import { FolderOpen } from "lucide-react";
 
 interface MarkdownContentProps {
   content: string;
   className?: string;
 }
 
+const FILE_EXT_PATTERN = /\.(ts|tsx|js|jsx|json|md|mdx|html|css|scss|yaml|yml|xml|sql|sh|py|rb|go|rs|java|kt|swift|c|cpp|h|cs|toml|ini|graphql|prisma|vue|svelte|txt|cfg|conf|lock|env|gitignore|dockerfile)$/i;
+const PATH_PATTERN = /^[~.]?\/[\w./-]+$|^[\w-]+\/[\w./-]+\.\w+$/;
+
+function isFilePath(text: string): boolean {
+  const cleaned = text.replace(/^~\//, "").replace(/^\.\//, "");
+  return (PATH_PATTERN.test(text) || FILE_EXT_PATTERN.test(text)) && cleaned.length > 2;
+}
+
+function normalizeFilePath(text: string): string {
+  // Strip leading ~/ or ./ or absolute paths to make relative
+  return text
+    .replace(/^~\/Source\/[^/]+\//, "") // ~/Source/ProjectName/ -> relative
+    .replace(/^~\//, "")
+    .replace(/^\.\//, "")
+    .replace(/^\/[^/]+\/[^/]+\/[^/]+\//, ""); // /Users/x/Source/Proj/ -> relative
+}
+
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
+  const navigate = useNavigate();
+  const selectedProject = useUIStore((s) => s.selectedProject);
+
+  function handleFileClick(filePath: string) {
+    const normalized = normalizeFilePath(filePath);
+    const dir = normalized.includes("/")
+      ? normalized.substring(0, normalized.lastIndexOf("/"))
+      : "";
+    navigate(`/files?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(normalized)}`);
+  }
+
   return (
     <div className={cn("text-sm text-gray-800", className)}>
     <ReactMarkdown
@@ -34,8 +65,24 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
         li: ({ children }) => (
           <li className="text-sm text-gray-700">{children}</li>
         ),
-        code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) =>
-          inline ? (
+        code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) => {
+          const text = String(children ?? "").trim();
+
+          // Make file paths clickable
+          if (inline && isFilePath(text) && selectedProject) {
+            return (
+              <button
+                className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 text-xs font-mono hover:bg-blue-100 hover:text-blue-900 transition-colors cursor-pointer border border-blue-200"
+                onClick={() => handleFileClick(text)}
+                title={`Open in file browser: ${text}`}
+              >
+                <FolderOpen className="w-3 h-3" />
+                {text}
+              </button>
+            );
+          }
+
+          return inline ? (
             <code
               className="bg-gray-100 text-gray-800 rounded px-1 py-0.5 text-xs font-mono"
               {...props}
@@ -46,7 +93,8 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
             <code className="block bg-gray-900 text-gray-100 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre" {...props}>
               {children}
             </code>
-          ),
+          );
+        },
         pre: ({ children }) => (
           <pre className="mb-2 overflow-x-auto rounded">{children}</pre>
         ),
@@ -81,6 +129,22 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
         strong: ({ children }) => (
           <strong className="font-semibold text-gray-900">{children}</strong>
         ),
+        img: ({ src, alt }) => {
+          // If it's a relative path and we have a project, serve via API
+          if (src && selectedProject && !src.startsWith("http")) {
+            const apiSrc = `/api/projects/${selectedProject}/file/raw?path=${encodeURIComponent(src)}`;
+            return (
+              <img
+                src={apiSrc}
+                alt={alt ?? ""}
+                className="max-w-full rounded border border-gray-200 my-2"
+              />
+            );
+          }
+          return (
+            <img src={src} alt={alt ?? ""} className="max-w-full rounded my-2" />
+          );
+        },
       }}
     >
       {content}

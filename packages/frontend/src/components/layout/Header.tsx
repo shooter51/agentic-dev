@@ -8,7 +8,7 @@ import { CreateTaskDialog } from "@/components/board/CreateTaskDialog";
 import { CreateProjectDialog } from "@/components/board/CreateProjectDialog";
 import { ImportProjectDialog } from "@/components/board/ImportProjectDialog";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutList, BarChart2, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
+import { LayoutList, BarChart2, FolderOpen, PanelRightOpen, PanelRightClose, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -53,6 +53,16 @@ export function Header() {
             >
               <BarChart2 className="w-3.5 h-3.5" />
               Stats
+            </Button>
+          </Link>
+          <Link to="/files">
+            <Button
+              variant={location.pathname === "/files" ? "secondary" : "ghost"}
+              size="sm"
+              className="gap-1.5 text-xs"
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+              Files
             </Button>
           </Link>
         </nav>
