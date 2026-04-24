@@ -482,6 +482,7 @@ export class Orchestrator {
             );
           }
           await this.pipeline.advance(taskId, agentId);
+          this.clearTaskRetries(taskId);
         }
       } finally {
         releaseMutex();
@@ -602,58 +603,137 @@ export class Orchestrator {
   // Error handling (private)
   // -------------------------------------------------------------------------
 
+  /** Tracks per-task retry attempts: taskId -> { count, lastAgentId, lastError } */
+  private readonly taskRetries: Map<string, { count: number; agents: Set<string>; lastError: string }> = new Map();
+  private static readonly MAX_TASK_RETRIES = 5;
+
   private handleAgentError(agentId: string, taskId: string, err: unknown): void {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`[Orchestrator] Agent ${agentId} failed on task ${taskId}:`, err);
+    const isTransient = this.classifyError(errorMessage);
 
+    // Track retries per task
+    const retryState = this.taskRetries.get(taskId) ?? { count: 0, agents: new Set<string>(), lastError: '' };
+    retryState.count++;
+    retryState.agents.add(agentId);
+    retryState.lastError = errorMessage;
+    this.taskRetries.set(taskId, retryState);
+
+    console.error(`[SelfHeal] Agent ${agentId} failed on task ${taskId} (attempt ${retryState.count}/${Orchestrator.MAX_TASK_RETRIES}, ${isTransient ? 'transient' : 'permanent'}): ${errorMessage.slice(0, 200)}`);
+
+    // Clear agent state
     const agentState = this.agents.get(agentId);
     if (agentState) {
       agentState.currentTaskId = null;
       agentState.conversationMessages = [];
     }
 
-    // Persist lastError to DB (best-effort — ALTER TABLE may have already run)
+    // Persist lastError to DB
     try {
       this.db.run(
-        sql`UPDATE agents SET last_error = ${errorMessage}, updated_at = ${new Date().toISOString()} WHERE id = ${agentId}`,
+        sql`UPDATE agents SET last_error = ${errorMessage.slice(0, 500)}, updated_at = ${new Date().toISOString()} WHERE id = ${agentId}`,
       );
-    } catch (dbErr) {
-      console.warn(`[Orchestrator] Failed to persist lastError for agent ${agentId}:`, dbErr);
-    }
+    } catch { /* best effort */ }
 
-    // Emit SSE so the dashboard shows the error
+    // Emit SSE
     this.sseBroadcaster.emit('agent-error', {
-      agentId,
-      taskId,
-      error: errorMessage,
+      agentId, taskId, error: errorMessage.slice(0, 200),
+      attempt: retryState.count,
+      isTransient,
       timestamp: new Date().toISOString(),
     });
 
-    // Clear the assignedAgent on the task so it can be re-dispatched.
-    // Use direct SQL to guarantee it runs even if the repo layer has issues.
+    // Clear task assignment
     try {
       this.db.run(
         sql`UPDATE tasks SET assigned_agent = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${taskId}`,
       );
-      console.log(`[Orchestrator] Cleared assignedAgent on task ${taskId}`);
-    } catch (clearErr) {
-      console.error(`[Orchestrator] Failed to clear task assignment ${taskId}:`, clearErr);
+    } catch { /* best effort */ }
+
+    // --- Self-healing strategy ---
+
+    if (retryState.count >= Orchestrator.MAX_TASK_RETRIES) {
+      // Give up — too many retries
+      console.warn(`[SelfHeal] Task ${taskId} failed ${retryState.count} times across agents [${[...retryState.agents].join(', ')}]. Giving up — manual intervention required.`);
+      this.setAgentStatus(agentId, 'idle').catch(() => {});
+      this.taskRetries.delete(taskId);
+      return;
     }
 
-    this.setAgentStatus(agentId, 'error').catch((statusErr) => {
-      console.error(`[Orchestrator] Failed to set agent ${agentId} to error state:`, statusErr);
-    });
+    if (isTransient) {
+      // Transient error: recover agent quickly, let dispatch retry with same or different agent
+      const backoffMs = Math.min(5_000 * Math.pow(2, retryState.count - 1), 60_000);
+      console.log(`[SelfHeal] Transient error — recovering ${agentId} in ${backoffMs / 1000}s (attempt ${retryState.count})`);
+      this.setAgentStatus(agentId, 'error').catch(() => {});
 
-    // Auto-recover after 30s — reset to idle so the dispatch loop picks it up
-    setTimeout(() => {
-      const state = this.agents.get(agentId);
-      if (state?.status === 'error') {
-        console.log(`[Orchestrator] Auto-recovering agent ${agentId} from error state`);
-        this.setAgentStatus(agentId, 'idle').catch((recoverErr) => {
-          console.error(`[Orchestrator] Failed to auto-recover agent ${agentId}:`, recoverErr);
+      setTimeout(() => {
+        const state = this.agents.get(agentId);
+        if (state?.status === 'error') {
+          console.log(`[SelfHeal] Recovering ${agentId} to idle`);
+          this.setAgentStatus(agentId, 'idle').catch(() => {});
+        }
+      }, backoffMs);
+
+    } else {
+      // Permanent error on this agent: mark agent errored, try a different agent
+      console.log(`[SelfHeal] Permanent error on ${agentId} — trying a different agent for task ${taskId}`);
+      this.setAgentStatus(agentId, 'error').catch(() => {});
+
+      // Find an alternative agent in the same lane that hasn't failed on this task
+      const task = this.taskRepo.findById(taskId).then((t) => {
+        if (!t) return;
+        const candidates = getAgentsForStage(t.stage);
+        const alternative = candidates.find((c) => {
+          const state = this.agents.get(c.id);
+          return state?.status === 'idle' && !retryState.agents.has(c.id);
         });
-      }
-    }, 30_000);
+
+        if (alternative) {
+          console.log(`[SelfHeal] Reassigning task ${taskId} to alternative agent ${alternative.id}`);
+          // The dispatch loop will pick it up since we cleared the assignment
+        } else {
+          console.log(`[SelfHeal] No alternative agents for task ${taskId} — will retry ${agentId} after recovery`);
+          // Recover the failed agent after a delay so it can retry
+          setTimeout(() => {
+            const state = this.agents.get(agentId);
+            if (state?.status === 'error') {
+              this.setAgentStatus(agentId, 'idle').catch(() => {});
+            }
+          }, 30_000);
+        }
+      }).catch(() => {
+        // Fallback: just recover after delay
+        setTimeout(() => {
+          const state = this.agents.get(agentId);
+          if (state?.status === 'error') {
+            this.setAgentStatus(agentId, 'idle').catch(() => {});
+          }
+        }, 30_000);
+      });
+    }
+  }
+
+  /** Classify errors as transient (retryable) or permanent */
+  private classifyError(message: string): boolean {
+    const transientPatterns = [
+      /rate.limit/i,
+      /timeout/i,
+      /ECONNRESET/i,
+      /ECONNREFUSED/i,
+      /ETIMEDOUT/i,
+      /overloaded/i,
+      /503/,
+      /502/,
+      /429/,
+      /spawn.*ENOENT/i,
+      /unknown error/i,
+      /exited with code 1/i,
+    ];
+    return transientPatterns.some((p) => p.test(message));
+  }
+
+  /** Clear retry tracking when a task completes successfully */
+  private clearTaskRetries(taskId: string): void {
+    this.taskRetries.delete(taskId);
   }
 
   // -------------------------------------------------------------------------
