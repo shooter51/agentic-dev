@@ -192,12 +192,23 @@ export default async function taskRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(404).send({ error: 'Task not found' });
     }
 
+    // Kill any running agent process for this task
+    const orchestrator = (fastify as any).orchestrator;
+    orchestrator?.cancelRunningTask?.(id);
+
     const pipeline = (fastify as any).pipeline;
     if (pipeline) {
       await pipeline.cancel(id, body.reason ?? 'Cancelled by operator');
     } else {
       await repo.updateStage(id, 'cancelled');
     }
+
+    // Clear assignment
+    const { tasks: tasksTable } = await import('../db/schema/tasks.js');
+    await db
+      .update(tasksTable)
+      .set({ assignedAgent: null, awaitingApproval: null, updatedAt: new Date().toISOString() })
+      .where(eq(tasksTable.id, id));
 
     (fastify as any).sseBroadcaster?.emit(SSE_EVENTS.TASK_UPDATED, {
       taskId: id,

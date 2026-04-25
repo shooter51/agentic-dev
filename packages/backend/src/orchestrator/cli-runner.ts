@@ -47,6 +47,8 @@ export interface RunnerDeps {
   memoryManager: MemoryManager;
   db: DB;
   sseBroadcaster: SSEBroadcaster;
+  /** Called with a kill function when the child process spawns */
+  onProcessSpawned?: (kill: () => void) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +433,14 @@ export async function runAgentLoop(
       cwd: repoPath,
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // Register kill handle so orchestrator can cancel running agents
+    deps.onProcessSpawned?.(() => {
+      if (!child.killed) {
+        child.kill();
+        console.log(`[cli-runner] Agent ${agent.id} process killed (task cancelled)`);
+      }
     });
 
     const state = {

@@ -151,6 +151,9 @@ export class Orchestrator {
   /** One mutex per target repo path — prevents concurrent git operations */
   private readonly repoMutexes: Map<string, Mutex> = new Map();
 
+  /** Tracks running child processes by taskId for cancellation */
+  private readonly runningProcesses: Map<string, { kill: () => void }> = new Map();
+
   private running = false;
   private dispatchLoopHandle: ReturnType<typeof setTimeout> | null = null;
 
@@ -233,6 +236,39 @@ export class Orchestrator {
     if (this.dispatchLoopHandle !== null) {
       clearTimeout(this.dispatchLoopHandle);
       this.dispatchLoopHandle = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Task cancellation — kills running agent process
+  // -------------------------------------------------------------------------
+
+  cancelRunningTask(taskId: string): void {
+    const handle = this.runningProcesses.get(taskId);
+    if (handle) {
+      console.log(`[Orchestrator] Killing process for cancelled task ${taskId}`);
+      handle.kill();
+      this.runningProcesses.delete(taskId);
+    }
+
+    // Clear agent assignment
+    for (const [agentId, state] of this.agents) {
+      if (state.currentTaskId === taskId) {
+        state.currentTaskId = null;
+        state.conversationMessages = [];
+        if (state.status === 'working') {
+          state.status = 'idle';
+          this.db.run(
+            sql`UPDATE agents SET status = 'idle', current_task = NULL, updated_at = ${new Date().toISOString()} WHERE id = ${agentId}`,
+          );
+          this.sseBroadcaster.emit('agent-status', {
+            agentId,
+            status: 'idle',
+            timestamp: new Date().toISOString(),
+          });
+          console.log(`[Orchestrator] Released agent ${agentId} from cancelled task ${taskId}`);
+        }
+      }
     }
   }
 
@@ -496,6 +532,9 @@ export class Orchestrator {
           memoryManager: this.memoryManager,
           db: this.db,
           sseBroadcaster: this.sseBroadcaster,
+          onProcessSpawned: (kill) => {
+            this.runningProcesses.set(taskId, { kill });
+          },
         };
         const result = await runAgentWithErrorHandling(agentDef, task, context, runnerDeps);
 
@@ -542,6 +581,9 @@ export class Orchestrator {
         releaseMutex();
       }
     } finally {
+      // Remove process handle
+      this.runningProcesses.delete(taskId);
+
       // Clear agent state on completion (regardless of outcome)
       const agentState = this.agents.get(agentId);
       console.log(`[Dispatch] finally block for ${agentId}: status=${agentState?.status}`);
