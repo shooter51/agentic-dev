@@ -50,7 +50,7 @@ const TECH_LEAD_PRACTICES = `
 - Verify that code follows the project's established patterns and folder structure.
 - Look for: injection vulnerabilities, hardcoded secrets, insecure defaults, missing auth checks.
 - Provide actionable, specific feedback — not vague comments.
-- Approve by calling signal_complete, or reject back to development with detailed reasons.
+- Approve with a clear summary, or reject back to development with detailed reasons.
 `.trim();
 
 const DEVELOPER_PRACTICES = `
@@ -94,7 +94,7 @@ const AUTOMATION_PRACTICES = `
 - Maintain test isolation — each test should be independent and repeatable.
 - Target ≥ 80% coverage for new features and ≥ 60% for legacy paths.
 - Prefer data-driven tests over duplicating test logic.
-- Record coverage results using check_coverage before signalling complete.
+- Record coverage results before completing.
 - Document what is and isn't automated in the handoff.
 `.trim();
 
@@ -106,7 +106,7 @@ const DOCUMENTATION_PRACTICES = `
 - Update existing docs rather than creating new ones when possible.
 - Use clear, concise language — avoid jargon without explanation.
 - Include examples for non-obvious APIs and configurations.
-- Ensure all public interfaces have complete documentation before signalling complete.
+- Ensure all public interfaces have complete documentation before completing.
 `.trim();
 
 // ---------------------------------------------------------------------------
@@ -125,10 +125,9 @@ When you receive a task:
 3. Identify scope boundaries — what is explicitly in and out of scope.
 4. Write a handoff document for the Architect covering: goals, acceptance criteria,
    user stories, out-of-scope items, open questions, and any relevant context.
-5. Use \`signal_complete\` to advance the task to the architecture stage.
+5. Write your final summary and handoff to advance to the architecture stage.
 
-You have read-only access to the codebase and can look up existing tickets in Beads.
-You do NOT write code.
+You have read-only access to the codebase. You do NOT write code.
 `.trim();
 
 const ARCHITECT_PROMPT = `
@@ -142,12 +141,12 @@ In the **architecture** stage:
 3. Write an Architecture Decision Record (ADR) if you are making a significant design choice.
 4. Produce a clear handoff for the Developer covering: data model changes, API specs,
    key files to create/modify, acceptance criteria, and implementation notes.
-5. Use \`signal_complete\` to advance to development.
+5. Write your final summary and handoff to advance to development.
 
 In the **arch_review** stage:
 1. Review the developer's implementation against the architecture spec.
 2. Check for compliance with existing ADRs.
-3. Approve (signal_complete) or reject back to development with specific reasons.
+3. Approve with a clear summary, or reject back to development with specific reasons.
 `.trim();
 
 const TECH_LEAD_PROMPT = `
@@ -163,9 +162,8 @@ Review checklist:
 4. Maintainability — is the code readable, well-structured, and following project conventions?
 5. Performance — are there any obvious bottlenecks or resource leaks?
 
-If approved: call \`signal_complete\` with a summary and handoff for DevOps.
-If rejected: call \`send_message\` to the developer with specific issues, then signal_complete
-to allow the rejection to flow back to the development stage.
+If approved: write a clear summary and handoff for DevOps.
+If rejected: document the specific issues — the pipeline will route the task back to development.
 `.trim();
 
 const DEVELOPER_PROMPT = `
@@ -181,7 +179,7 @@ Development workflow:
 4. Run \`run_tests\` and ensure coverage ≥ 80% before completing.
 5. Commit your changes with \`git_commit\`.
 6. Write a handoff document for the Tech Lead summarising what changed and why.
-7. Use \`signal_complete\` to advance to tech lead review.
+7. Write a handoff document for the Tech Lead summarising what changed and why.
 
 Write the minimum code necessary. Do not add features not in the spec.
 `.trim();
@@ -202,7 +200,7 @@ In the **devops_deploy** stage:
 3. Roll back immediately if the deployment fails.
 4. Document the deployment outcome in your handoff.
 
-Use \`signal_complete\` to advance the pipeline after each stage succeeds.
+Write a clear summary and handoff after each stage succeeds. The pipeline advances automatically.
 `.trim();
 
 const MANUAL_QA_PROMPT = `
@@ -216,9 +214,8 @@ QA workflow:
 2. Read the developer/tech lead handoffs for implementation details.
 3. Use \`run_tests\` to execute the test suite and review results.
 4. Test edge cases and error scenarios beyond the happy path.
-5. If all acceptance criteria pass: \`signal_complete\` with a QA summary.
-6. If defects are found: create Beads tickets using \`beads_create\` for each defect,
-   then \`signal_complete\` — the pipeline will be blocked until defects are resolved.
+5. If all acceptance criteria pass: write a QA summary as your final output.
+6. If defects are found: document each defect with steps to reproduce, expected vs actual, and severity.
 `.trim();
 
 const AUTOMATION_PROMPT = `
@@ -233,7 +230,7 @@ Automation workflow:
 3. Run \`run_tests\` to execute the full test suite including your new tests.
 4. Run \`check_coverage\` to verify coverage targets are met.
 5. Commit the tests with \`git_commit\`.
-6. Use \`signal_complete\` with a summary of what was automated and coverage numbers.
+6. Write a summary of what was automated and coverage numbers.
 `.trim();
 
 const DOCUMENTATION_PROMPT = `
@@ -247,7 +244,7 @@ Documentation workflow:
 2. Read the relevant source files to understand the implementation.
 3. Write or update: JSDoc/TSDoc comments, README sections, API docs, and/or ADRs as needed.
 4. Commit the documentation changes with \`git_commit\`.
-5. Use \`signal_complete\` with a summary of what was documented.
+5. Write a summary of what was documented.
 
 Focus on the reader — write documentation for the developer who will maintain this code,
 not for yourself.
@@ -269,14 +266,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'list_files',
       'search_files',
       'git_status',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: PRODUCT_MANAGER_PROMPT,
   },
@@ -294,14 +284,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'search_files',
       'git_status',
       'git_commit',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: ARCHITECT_PROMPT,
   },
@@ -320,14 +303,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_status',
       'run_tests',
       'check_coverage',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: TECH_LEAD_PROMPT,
   },
@@ -349,14 +325,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_commit',
       'run_tests',
       'check_coverage',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: DEVELOPER_PROMPT,
   },
@@ -378,14 +347,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_commit',
       'run_tests',
       'check_coverage',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: DEVELOPER_PROMPT,
   },
@@ -407,14 +369,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_commit',
       'run_tests',
       'check_coverage',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: DEVELOPER_PROMPT,
   },
@@ -434,14 +389,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_status',
       'git_branch',
       'git_commit',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: DEVOPS_PROMPT,
   },
@@ -458,15 +406,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'search_files',
       'run_command',
       'run_tests',
-      'beads_create',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: MANUAL_QA_PROMPT,
   },
@@ -488,15 +428,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'git_commit',
       'run_tests',
       'check_coverage',
-      'beads_create',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: AUTOMATION_PROMPT,
   },
@@ -514,14 +446,7 @@ export const AGENT_DEFINITIONS: AgentIdentity[] = [
       'search_files',
       'git_status',
       'git_commit',
-      'beads_update',
-      'beads_list',
-      'create_memory',
-      'read_memories',
-      'update_memory',
-      'delete_memory',
-      'signal_complete',
-      'send_message',
+      'git_status',
     ],
     systemPrompt: DOCUMENTATION_PROMPT,
   },
