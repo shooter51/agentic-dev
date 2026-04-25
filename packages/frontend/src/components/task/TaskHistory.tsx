@@ -52,9 +52,17 @@ function parseDetails(event: TaskHistoryEvent): string | null {
     if (event.event === "quality_gate") {
       const failures = parsed.failures;
       if (Array.isArray(failures) && failures.length > 0) {
-        return failures.join(", ");
+        return failures
+          .map((f: any) => f.message ?? f.gate ?? String(f))
+          .join(", ");
       }
-      return null;
+      // Show advisory warnings too
+      if (parsed.advisory && Array.isArray(parsed.advisory)) {
+        return parsed.advisory
+          .map((f: any) => f.message ?? f.gate ?? String(f))
+          .join(", ");
+      }
+      return parsed.message ?? null;
     }
     return null;
   } catch {
