@@ -450,6 +450,15 @@ export async function runAgentLoop(
     };
 
     let stderr = '';
+    let resolved = false;
+    let resultTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function resolveOnce(result: AgentResult) {
+      if (resolved) return;
+      resolved = true;
+      if (resultTimeout) clearTimeout(resultTimeout);
+      resolve(result);
+    }
 
     child.stderr.on('data', (d: Buffer) => {
       stderr += d.toString();
@@ -461,6 +470,21 @@ export async function runAgentLoop(
         const trimmed = line.trim();
         if (!trimmed) continue;
         parseEvent(trimmed, agent, task, deps, state);
+      }
+
+      // If we got a result event but process hasn't exited, set a kill timer
+      if (completionState.completed && !resultTimeout) {
+        resultTimeout = setTimeout(() => {
+          if (!child.killed) {
+            console.log(`[cli-runner] Agent ${agent.id} process didn't exit after result — killing`);
+            child.kill();
+          }
+          resolveOnce({
+            summary: completionState.summary || state.finalSummary,
+            handoffContent: completionState.handoffContent,
+            completedViaSignal: completionState.completed,
+          });
+        }, 15_000);
       }
     });
 
@@ -486,7 +510,7 @@ export async function runAgentLoop(
         console.warn(`[cli-runner] Agent ${agent.id} ${backend} CLI exited with code ${code}. stderr: ${stderr.slice(0, 500)}`);
       }
 
-      resolve({
+      resolveOnce({
         summary: completionState.summary || state.finalSummary,
         handoffContent: completionState.handoffContent,
         completedViaSignal: completionState.completed,
